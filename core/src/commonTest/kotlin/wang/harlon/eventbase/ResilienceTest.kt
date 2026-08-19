@@ -5,6 +5,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -78,11 +80,9 @@ class ResilienceTest {
         Eventbase.reset()
         try {
             val storage = MemoryStorage()
-            val installed = mutableListOf<EventbaseClient>()
-            withContext(Dispatchers.Default) {
-                repeat(50) {
-                    launch { installed += Eventbase.initForTest(RecordingSink(), storage = storage) }
-                }
+            // 收集不能用共享的 MutableList：Native 上 50 个线程并发 add 会撕裂出 null 空槽
+            val installed = withContext(Dispatchers.Default) {
+                List(50) { async { Eventbase.initForTest(RecordingSink(), storage = storage) } }.awaitAll()
             }
 
             assertEquals(1, installed.distinct().size)
