@@ -14,7 +14,8 @@
 
 ## 铁律
 
-- **依赖最小集**：ktor-client-core + kotlinx-serialization-json + kotlinx-coroutines-core，engine 由消费方提供。加任何依赖前先过服务端仓 CLAUDE.md 的「依赖准入」判据。
+- **依赖准入**：common 只有 ktor-client-core + kotlinx-serialization-json + kotlinx-coroutines-core，engine 由消费方提供；androidMain 另有 `androidx.lifecycle:lifecycle-process`。加任何依赖前先过服务端仓 CLAUDE.md 的「依赖准入」判据。
+  - `lifecycle-process` 的准入结论（2026-08-19）：**四条判据全过**——Google 维护的 AndroidX 事实标准、Maven Central 签名发布、传递依赖只有 lifecycle-runtime/common、无安装脚本。引它的理由是自己数 Activity 数不出配置变更：`ProcessLifecycleOwner` 内置 700ms 去抖，旋转屏幕不会切出假会话（审查清单 K10）。
 - **注释准入**：「为什么」写进服务端仓的 docs，「是什么」靠命名，注释只留「反直觉」。四类允许（反直觉约束 / 外部契约 / 踩坑一行 + 日期 / 公共 API 的 KDoc）；禁止复述代码、抄设计论证、分节横幅；超过 3 行的解释改成一行指针。**边界**：本规则只适用于本仓与 eventbase，改消费方时沿用各自风格。
 - **协议变更**：以服务端仓 `docs/protocol.md` 为准；那边变更会在本仓开跟进 issue，落地前不关。两仓独立版本线，tag 为裸版本号。
 - **埋点绝不能成为业务的故障源**：上报失败一律吞掉，队列满按「丢最老」自愈，绝不抛给调用方。

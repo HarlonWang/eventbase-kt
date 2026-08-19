@@ -34,6 +34,10 @@ kotlin {
             implementation(libs.kotlinx.coroutines.core)
         }
 
+        androidMain.dependencies {
+            implementation(libs.androidx.lifecycle.process)
+        }
+
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)

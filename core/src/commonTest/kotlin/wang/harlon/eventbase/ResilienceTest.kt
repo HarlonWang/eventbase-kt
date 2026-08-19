@@ -29,8 +29,10 @@ class ResilienceTest {
         good.track(TestEvent("kept_one"))
         good.track(TestEvent("kept_two"))
 
-        val raw = storage.get("eventbase.queue")!!
-        storage.put("eventbase.queue", raw.replaceFirst("{\"name\":\"kept_one\"", "{\"nome\":\"kept_one\""))
+        // 未合并前事件在 pending key 里，合并后在 base key，测试对两种布局都成立
+        val key = listOf("eventbase.queue", "eventbase.queue.pending").first { storage.get(it) != null }
+        val raw = storage.get(key)!!
+        storage.put(key, raw.replaceFirst("{\"name\":\"kept_one\"", "{\"nome\":\"kept_one\""))
 
         val sink = RecordingSink()
         client(sink, storage).flush()

@@ -53,7 +53,20 @@ class QueueTest {
         repeat(Limits.BATCH + 3) { c.track(TestEvent("e$it")) }
         c.flush()
 
+        assertEquals(listOf(Limits.BATCH, 3), sink.batches().map { it.size })
         assertEquals(Limits.BATCH + 3, sink.names.size)
+    }
+
+    @Test
+    fun survivesRestartWhilePendingIsNotYetCompacted() = runTest {
+        val storage = MemoryStorage()
+        val c = client(FailingSink(), storage)
+        repeat(3) { c.track(TestEvent("e$it")) }
+
+        val sink = RecordingSink()
+        client(sink, storage).flush()
+
+        assertEquals(listOf("e0", "e1", "e2"), sink.names)
     }
 
     @Test

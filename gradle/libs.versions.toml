@@ -7,6 +7,9 @@ vanniktechMavenPublish = "0.37.0"
 ktor = "3.5.2"
 kotlinx-serialization = "1.11.0"
 kotlinx-coroutines = "1.11.0"
+# 仅 androidMain：ProcessLifecycleOwner 自带 700ms 去抖，配置变更（旋转）不再切出假会话。
+# 过依赖准入的「业界权威库」四条判据：Google 维护、Central 签名、传递依赖仅 lifecycle-runtime、无安装脚本。
+androidx-lifecycle = "2.11.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -16,6 +19,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 # engine 刻意不依赖：消费方各自提供
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
+androidx-lifecycle-process = { module = "androidx.lifecycle:lifecycle-process", version.ref = "androidx-lifecycle" }
 
 [plugins]
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }

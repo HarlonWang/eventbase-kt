@@ -1,6 +1,7 @@
 package wang.harlon.eventbase
 
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeout
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineScope
 
@@ -10,6 +11,9 @@ object Eventbase {
 
     @Volatile
     private var client: EventbaseClient? = null
+
+    /** 平台侧挂上生命周期观察者后置位；[reset] 据此决定要不要去摘 */
+    internal var lifecycleAttached = false
 
     val current: EventbaseClient?
         get() = client
@@ -61,7 +65,11 @@ object Eventbase {
     }
 
     fun reset() {
-        lock.withLock { client = null }
+        val attached = lock.withLock {
+            client = null
+            lifecycleAttached.also { lifecycleAttached = false }
+        }
+        if (attached) detachLifecycle()
     }
 
     /**
@@ -87,7 +95,16 @@ internal fun installClient(
     clock: Clock = systemClock(),
     scope: CoroutineScope = defaultScope(),
 ): Installed = Eventbase.install {
-    EventbaseClient(config, storage, HttpSink(httpClient ?: HttpClient()), clock, scope)
+    EventbaseClient(config, storage, HttpSink(httpClient ?: defaultHttpClient()), clock, scope)
+}
+
+/** 自带超时：卡住的上报会一直占着 flush 的锁，后续批次全被堵在后面。自带 client 的消费方需自行配置。 */
+private fun defaultHttpClient() = HttpClient {
+    install(HttpTimeout) {
+        connectTimeoutMillis = 10_000
+        requestTimeoutMillis = 20_000
+        socketTimeoutMillis = 20_000
+    }
 }
 
 private fun testConfig() =

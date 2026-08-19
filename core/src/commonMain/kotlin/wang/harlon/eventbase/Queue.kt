@@ -13,6 +13,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
 private const val KEY = "eventbase.queue"
+private const val KEY_PENDING = "eventbase.queue.pending"
+
+/** 攒够这么多条就把 pending 合进 base；决定了单次 track 的落盘规模上限 */
+private const val COMPACT_AT = Limits.BATCH
 
 /**
  * 落盘队列。溢出丢最老、出队前丢弃过期事件——**自清窗口必须与服务端的拒收窗口同一个数**，
@@ -24,8 +28,12 @@ internal class EventQueue(private val storage: Storage, private val clock: Clock
     private val lock = Lock()
     private val items = ArrayDeque<QueuedEvent>()
 
+    /** 自上次合并以来新入队的事件，单独落一个小 key——见 [persistAppend] */
+    private val pending = mutableListOf<QueuedEvent>()
+
     init {
         storage.get(KEY)?.let { items.addAll(decode(it)) }
+        storage.get(KEY_PENDING)?.let { items.addAll(decode(it)) }
     }
 
     val size: Int get() = lock.withLock { items.size }
@@ -33,8 +41,12 @@ internal class EventQueue(private val storage: Storage, private val clock: Clock
     fun add(event: QueuedEvent) {
         lock.withLock {
             items.addLast(event)
+            val overflowed = items.size > Limits.QUEUE_CAP
             while (items.size > Limits.QUEUE_CAP) items.removeFirst()
-            persist()
+            pending += event
+            // 队满丢了队头，或 pending 攒够了，才重写整个 base；其余情况只追加一个小 key。
+            // 每次 track 都全量序列化 500 条的话，开销会落在调用方线程上。
+            if (overflowed || pending.size >= COMPACT_AT) persist() else persistAppend()
         }
     }
 
@@ -70,8 +82,15 @@ internal class EventQueue(private val storage: Storage, private val clock: Clock
         persist()
     }
 
+    /** 合并：base 写全量，pending 清空 */
     private fun persist() {
         if (items.isEmpty()) storage.remove(KEY) else storage.put(KEY, encode(items))
+        pending.clear()
+        storage.remove(KEY_PENDING)
+    }
+
+    private fun persistAppend() {
+        storage.put(KEY_PENDING, encode(pending))
     }
 }
 
