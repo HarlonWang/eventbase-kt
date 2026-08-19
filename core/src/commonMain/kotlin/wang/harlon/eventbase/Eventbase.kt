@@ -49,6 +49,15 @@ object Eventbase {
         client?.flush()
     }
 
+    /** 平台侧生命周期回调的入口，App 代码不必直接调。 */
+    fun onForeground() {
+        client?.lifecycle?.onForeground()
+    }
+
+    fun onBackground() {
+        client?.lifecycle?.onBackground()
+    }
+
     fun reset() {
         client = null
     }

@@ -33,7 +33,16 @@ class EventbaseClient internal constructor(
     val installId: String = storage.get(KEY_INSTALL) ?: newId().also { storage.put(KEY_INSTALL, it) }
     val sessionId: String = newId()
 
+    /** 首个 Activity 之前就有事件 = 这个进程是被后台任务拉起来的 */
+    internal var trackedAnything = false
+        private set
+
+    internal val lifecycle: LifecycleTracker by lazy {
+        LifecycleTracker(this, clock) { scope.launch { flush() } }
+    }
+
     fun track(event: Event, flow: String? = null) {
+        trackedAnything = true
         queue.add(QueuedEvent(event.name, clock.now(), flow, event.props))
         if (config.logEvents) log(event)
         if (queue.size >= config.flushAt) scope.launch { flush() }

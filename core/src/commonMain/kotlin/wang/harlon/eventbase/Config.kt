@@ -11,6 +11,8 @@ data class EventbaseConfig(
     /** 攒够这么多条就 flush；进后台与定时也会触发 */
     val flushAt: Int = 10,
     val logEvents: Boolean = false,
+    /** 自动上报 app_opened / app_backgrounded，并在进后台时 flush */
+    val autoLifecycle: Boolean = true,
 )
 
 internal object Limits {

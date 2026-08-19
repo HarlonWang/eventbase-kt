@@ -4,10 +4,10 @@
 
 强类型事件定义、落盘队列、批量上报、生命周期自动埋点。协议契约以服务端仓的 [`docs/protocol.md`](https://github.com/HarlonWang/eventbase/blob/main/docs/protocol.md) 为唯一权威。
 
-> **状态（2026-08-19）**：核心已实现——install_id、落盘队列、批量上报、退避重试、flow 串联、
-> 强类型事件、`RecordingSink` 测试替身（17 个测试，Android host + iOS 两端编译通过）。
-> **尚未实现**：生命周期自动事件（`app_opened` / `app_backgrounded`）、定时 flush。
-> 本文第 3 节「后台唤醒」与第 4 节「生命周期事件」描述的是目标形态，那部分还没落地。
+> **状态（2026-08-19）**：核心与生命周期均已实现——install_id、落盘队列、批量上报、退避重试、
+> flow 串联、强类型事件、`app_opened` / `app_backgrounded` 自动上报、进后台 flush、
+> `RecordingSink` 测试替身。24 个测试（Android host），iOS 两个 target 编译通过。
+> **刻意不做定时 flush**：进后台与攒够 `flushAt` 两条触发已覆盖，定时器在移动端只换来耗电与复杂度。
 
 ## 接入面只有 4 个 API
 
@@ -29,11 +29,17 @@ Eventbase.init(
     config = EventbaseConfig(
         endpoint = "https://api.trendingai.cn/t",
         appKey = BuildConfig.EVENTBASE_KEY,  // 公开 key，进 APK 无妨
+        appVersion = BuildConfig.VERSION_NAME,
+        platform = "android",
         channel = BuildConfig.CHANNEL,
+        locale = systemLocaleTag(),
         isDebug = BuildConfig.DEBUG,
     ),
 )
 ```
+
+Android 侧会自动注册 `ActivityLifecycleCallbacks`、iOS 侧注册 `NSNotificationCenter` 观察者，
+`app_opened` / `app_backgrounded` 无需接入方写一行代码（`autoLifecycle = false` 可关）。
 
 `init` 之后库自己接管 install_id 的生成与持久化、app_version / platform / locale 的采集、生命周期事件、离线队列。
 
