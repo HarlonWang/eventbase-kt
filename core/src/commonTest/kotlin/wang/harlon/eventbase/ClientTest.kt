@@ -73,6 +73,18 @@ class ClientTest {
         assertEquals(flow, sink.flowOf("auth_started"))
     }
 
+    /** android.util.Log 在宿主单测里未 mock，日志开关不能因此把调用方带崩。 */
+    @Test
+    fun diagnosticLoggingNeverThrows() = runTest {
+        val sink = RecordingSink()
+        val c = client(sink, config = testConfig(logEvents = true))
+
+        c.track(TestEvent("app_opened"))
+        c.flush()
+
+        assertEquals(listOf("app_opened"), sink.names)
+    }
+
     @Test
     fun flushAtTriggersUpload() = runTest {
         val sink = RecordingSink()

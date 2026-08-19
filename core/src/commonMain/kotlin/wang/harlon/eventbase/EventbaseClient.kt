@@ -69,7 +69,10 @@ class EventbaseClient internal constructor(
 
     suspend fun flush() {
         mutex.withLock {
-            if (clock.now() < backoffUntil) return
+            if (clock.now() < backoffUntil) {
+                if (config.logEvents) logLine("flush skipped, backoff for ${backoffUntil - clock.now()}ms")
+                return
+            }
             while (true) {
                 val events = queue.peek()
                 if (events.isEmpty()) return
@@ -86,9 +89,11 @@ class EventbaseClient internal constructor(
                     SendResult.DROP -> {
                         queue.drop(events.size)
                         backoff = BACKOFF_START_MS
+                        if (config.logEvents) logLine("flush ${events.size} sent, queued=${queue.size}")
                     }
                     SendResult.RETRY -> {
                         backoffUntil = clock.now() + backoff
+                        if (config.logEvents) logLine("flush ${events.size} kept, retry in ${backoff}ms, queued=${queue.size}")
                         backoff = minOf(backoff * 2, BACKOFF_MAX_MS)
                         return
                     }
@@ -101,7 +106,7 @@ class EventbaseClient internal constructor(
 
     internal fun dispose() = onDispose()
 
-    private fun log(event: Event) = println("[eventbase] ${event.name} ${event.props}")
+    private fun log(event: Event) = logLine("track ${event.name} ${event.props}")
 }
 
 @OptIn(ExperimentalUuidApi::class)

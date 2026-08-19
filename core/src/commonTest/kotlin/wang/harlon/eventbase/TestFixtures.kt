@@ -31,7 +31,7 @@ data class TestEvent(
     override val props: Map<String, Any?> = emptyMap(),
 ) : Event
 
-fun testConfig(flushAt: Int = 1000) = EventbaseConfig(
+fun testConfig(flushAt: Int = 1000, logEvents: Boolean = false) = EventbaseConfig(
     endpoint = "https://example.invalid/t",
     appKey = "app-key",
     appVersion = "1.3.0",
@@ -39,6 +39,7 @@ fun testConfig(flushAt: Int = 1000) = EventbaseConfig(
     channel = "play",
     locale = "zh-Hans-CN",
     flushAt = flushAt,
+    logEvents = logEvents,
 )
 
 fun client(

@@ -22,6 +22,9 @@ internal class HttpSink(private val client: HttpClient) : Sink {
             contentType(ContentType.Application.Json)
             setBody(body(batch))
         }
+        if (batch.config.logEvents) {
+            logLine("POST /e -> ${response.status.value} (${batch.events.size} events)")
+        }
         // 4xx 与 204 一律出队：服务端已判定，重试无意义。只有 5xx 与网络错误才留。
         return if (response.status.value < 500) SendResult.DROP else SendResult.RETRY
     }
