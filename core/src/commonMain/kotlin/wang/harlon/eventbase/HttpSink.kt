@@ -51,6 +51,7 @@ internal fun body(batch: Batch): String =
                 batch.events.forEach { event ->
                     add(
                         buildJsonObject {
+                            put("id", JsonPrimitive(event.id))
                             put("name", JsonPrimitive(event.name))
                             put("at", JsonPrimitive(event.at))
                             event.flow?.let { put("flow", JsonPrimitive(it)) }

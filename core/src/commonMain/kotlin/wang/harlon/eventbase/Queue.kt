@@ -113,6 +113,7 @@ internal fun encode(events: Collection<QueuedEvent>): String =
         events.forEach { event ->
             add(
                 buildJsonObject {
+                    put("id", JsonPrimitive(event.id))
                     put("name", JsonPrimitive(event.name))
                     put("at", JsonPrimitive(event.at))
                     event.flow?.let { put("flow", JsonPrimitive(it)) }
@@ -168,6 +169,7 @@ private fun decode(raw: String): List<QueuedEvent> {
 
 private fun decodeOne(obj: JsonObject): QueuedEvent =
     QueuedEvent(
+        id = obj["id"]?.jsonPrimitive?.content ?: newId(),
         name = obj.getValue("name").jsonPrimitive.content,
         at = obj.getValue("at").jsonPrimitive.long(),
         flow = obj["flow"]?.jsonPrimitive?.content,

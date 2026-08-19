@@ -15,6 +15,9 @@ class RecordingSink : Sink {
     fun userOf(name: String): String? =
         batches.first { batch -> batch.events.any { it.name == name } }.user
 
+    fun idOf(name: String): String =
+        batches.flatMap { it.events }.first { it.name == name }.id
+
     fun sessionOf(name: String): String =
         batches.first { batch -> batch.events.any { it.name == name } }.session
 

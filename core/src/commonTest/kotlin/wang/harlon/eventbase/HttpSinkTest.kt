@@ -16,7 +16,7 @@ class HttpSinkTest {
     }
 
     private val batch = Batch("install-1", "session-1", null, testConfig(), listOf(
-        QueuedEvent("app_opened", 1_700_000_000_000, null, emptyMap(), "session-1", null)
+        QueuedEvent("event-1", "app_opened", 1_700_000_000_000, null, emptyMap(), "session-1", null)
     ))
 
     @Test

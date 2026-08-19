@@ -48,7 +48,9 @@ class EventbaseClient internal constructor(
 
     fun track(event: Event, flow: String? = null) {
         trackedAnything = true
-        queue.add(QueuedEvent(event.name, clock.now(), flow, canonicalProps(event.props), sessionId, userId))
+        queue.add(
+            QueuedEvent(newId(), event.name, clock.now(), flow, canonicalProps(event.props), sessionId, userId)
+        )
         if (config.logEvents) log(event)
         if (queue.size >= config.flushAt) scope.launch { flush() }
     }

@@ -34,7 +34,7 @@ class ResilienceTest {
         // 未合并前事件在 pending key 里，合并后在 base key，测试对两种布局都成立
         val key = listOf("eventbase.queue", "eventbase.queue.pending").first { storage.get(it) != null }
         val raw = storage.get(key)!!
-        storage.put(key, raw.replaceFirst("{\"name\":\"kept_one\"", "{\"nome\":\"kept_one\""))
+        storage.put(key, raw.replaceFirst("\"name\":\"kept_one\"", "\"nome\":\"kept_one\""))
 
         val sink = RecordingSink()
         client(sink, storage).flush()
