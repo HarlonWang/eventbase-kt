@@ -6,7 +6,7 @@
 
 > **状态（2026-08-19）**：核心与生命周期均已实现——install_id、落盘队列、批量上报、退避重试、
 > flow 串联、强类型事件、`app_opened` / `app_backgrounded` 自动上报、进后台 flush、
-> `RecordingSink` 测试替身。24 个测试（Android host），iOS 两个 target 编译通过。
+> `RecordingSink` 测试替身。45 个测试（Android host），iOS 两个 target 编译通过。
 > **刻意不做定时 flush**：进后台与攒够 `flushAt` 两条触发已覆盖，定时器在移动端只换来耗电与复杂度。
 
 ## 接入面只有 4 个 API
@@ -35,9 +35,14 @@ Eventbase.init(
         channel = BuildConfig.CHANNEL,
         locale = systemLocaleTag(),
         isDebug = BuildConfig.DEBUG,
+        installId = existingInstallId,          // 可选，见下
     ),
 )
 ```
+
+`installId` 只在库自己的存储里还没有 id 时作**种子**写入，之后再传别的值也不会改它。
+消费方若已有一个安装级标识（TrendingAI 拿它当 chat 配额的 `X-Install-Id`），传进来，
+客户端事件才能和服务端按同一个 id 补发的事件（配额拦截、成单）串成一条漏斗；不传就由库自己生成。
 
 Android 侧会自动注册 `ActivityLifecycleCallbacks`、iOS 侧注册 `NSNotificationCenter` 观察者，
 `app_opened` / `app_backgrounded` 无需接入方写一行代码（`autoLifecycle = false` 可关）。

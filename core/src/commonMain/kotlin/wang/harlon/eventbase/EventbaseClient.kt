@@ -34,7 +34,8 @@ class EventbaseClient internal constructor(
     private var backoffUntil = 0L
     private var backoff = BACKOFF_START_MS
 
-    val installId: String = storage.get(KEY_INSTALL) ?: newId().also { storage.put(KEY_INSTALL, it) }
+    val installId: String =
+        storage.get(KEY_INSTALL) ?: (config.installId ?: newId()).also { storage.put(KEY_INSTALL, it) }
     val sessionId: String = newId()
 
     /** 首个 Activity 之前就有事件 = 这个进程是被后台任务拉起来的 */

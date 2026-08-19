@@ -13,6 +13,11 @@ data class EventbaseConfig(
     val logEvents: Boolean = false,
     /** 自动上报 app_opened / app_backgrounded，并在进后台时 flush */
     val autoLifecycle: Boolean = true,
+    /**
+     * 消费方已有的安装级标识，仅在库自己的存储里还没有 install_id 时作种子写入。
+     * 用于让客户端事件与服务端按业务 install_id 补发的事件（配额拦截、成单）串得起来。
+     */
+    val installId: String? = null,
 )
 
 internal object Limits {

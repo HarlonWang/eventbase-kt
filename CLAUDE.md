@@ -24,4 +24,9 @@
 
 ## 当前状态
 
-**建仓（2026-08-18），只有骨架与 README，实现未开始。** 落地顺序见服务端仓 README 的「状态」。
+**核心与生命周期已实现，45 个测试（Android host）+ iOS 两 target 编译通过**（2026-08-19）。
+首个消费方 TrendingAI 已接入（composite build，`local.properties` 的 `eventbase-kt.dir`）。
+落地顺序见服务端仓 README 的「状态」。
+
+⚠️ **尚未发布 Maven Central**。TrendingAI 的 CI（打 tag 发版）只认 `libs.versions.toml` 里的坐标，
+所以**它发版之前本库必须先发 0.1.0**。

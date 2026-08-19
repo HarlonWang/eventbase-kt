@@ -31,6 +31,17 @@ class ClientTest {
     }
 
     @Test
+    fun seedInstallIdIsAdoptedOnceThenIgnored() {
+        val storage = MemoryStorage()
+        val seeded = client(RecordingSink(), storage, config = testConfig().copy(installId = "biz-install"))
+        assertEquals("biz-install", seeded.installId)
+
+        // 换个种子也不该改已定的 install_id：改了等于把一台设备算成两台
+        val later = client(RecordingSink(), storage, config = testConfig().copy(installId = "another"))
+        assertEquals("biz-install", later.installId)
+    }
+
+    @Test
     fun userIdPersistsAndClears() {
         val storage = MemoryStorage()
         client(RecordingSink(), storage).setUserId("identity-1")
