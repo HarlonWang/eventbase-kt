@@ -31,14 +31,16 @@ internal class LifecycleTracker(
             wokenInBackground = client.trackedAnything
             client.track(AppOpened(isCold = true))
         }
-        foregroundAt = clock.now()
+        if (foregroundAt == 0L) foregroundAt = clock.now()
     }
 
     fun onBackground() {
-        if (foregroundAt == 0L) return
-        val seconds = (clock.now() - foregroundAt) / 1000
-        foregroundAt = 0L
-        if (seconds > 0) client.track(AppBackgrounded(seconds, wokenInBackground))
+        if (foregroundAt != 0L) {
+            val seconds = (clock.now() - foregroundAt) / 1000
+            foregroundAt = 0L
+            if (seconds > 0) client.track(AppBackgrounded(seconds, wokenInBackground))
+        }
+        // 无论有没有前台区间都要 flush：后台唤醒进程里攒的事件否则要等到下次启动
         onBackgroundFlush()
     }
 }

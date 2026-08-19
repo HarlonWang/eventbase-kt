@@ -11,8 +11,10 @@ fun Eventbase.init(
     config: EventbaseConfig,
     httpClient: HttpClient = HttpClient(),
 ): EventbaseClient {
+    val existing = current
     val client = init(config, SharedPrefsStorage(context), httpClient)
-    if (config.autoLifecycle) {
+    // 只在真正装上新实例时注册：重复 init 会叠加 watcher，app_opened 就重复上报了
+    if (existing == null && config.autoLifecycle) {
         (context.applicationContext as? Application)?.registerActivityLifecycleCallbacks(ForegroundWatcher())
     }
     return client

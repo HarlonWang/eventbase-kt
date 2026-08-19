@@ -15,6 +15,12 @@ class RecordingSink : Sink {
     fun userOf(name: String): String? =
         batches.first { batch -> batch.events.any { it.name == name } }.user
 
+    fun sessionOf(name: String): String =
+        batches.first { batch -> batch.events.any { it.name == name } }.session
+
+    /** 每次 send 的事件名，用于断言分批边界 */
+    fun batches(): List<List<String>> = batches.map { batch -> batch.events.map { it.name } }
+
     fun sysOf(name: String): EventbaseConfig =
         batches.first { batch -> batch.events.any { it.name == name } }.config
 

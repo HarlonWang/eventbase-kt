@@ -1,7 +1,9 @@
 package wang.harlon.eventbase
 
+import kotlin.concurrent.Volatile
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,6 +28,7 @@ class EventbaseClient internal constructor(
     private val queue = EventQueue(storage, clock)
     private val mutex = Mutex()
 
+    @Volatile
     private var userId: String? = storage.get(KEY_USER)
     private var backoffUntil = 0L
     private var backoff = BACKOFF_START_MS
@@ -34,6 +37,7 @@ class EventbaseClient internal constructor(
     val sessionId: String = newId()
 
     /** 首个 Activity 之前就有事件 = 这个进程是被后台任务拉起来的 */
+    @Volatile
     internal var trackedAnything = false
         private set
 
@@ -43,7 +47,8 @@ class EventbaseClient internal constructor(
 
     fun track(event: Event, flow: String? = null) {
         trackedAnything = true
-        queue.add(QueuedEvent(event.name, clock.now(), flow, event.props))
+        // props 复制一份：调用方之后改自己的 map 不能影响已入队的事件
+        queue.add(QueuedEvent(event.name, clock.now(), flow, event.props.toMap(), sessionId, userId))
         if (config.logEvents) log(event)
         if (queue.size >= config.flushAt) scope.launch { flush() }
     }
@@ -68,8 +73,16 @@ class EventbaseClient internal constructor(
             while (true) {
                 val events = queue.peek()
                 if (events.isEmpty()) return
-                val batch = Batch(installId, sessionId, userId, config, events)
-                when (runCatching { sink.send(batch) }.getOrDefault(SendResult.RETRY)) {
+                val head = events.first()
+                val batch = Batch(installId, head.session, head.user, config, events)
+                val result = try {
+                    sink.send(batch)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Throwable) {
+                    SendResult.RETRY
+                }
+                when (result) {
                     SendResult.DROP -> {
                         queue.drop(events.size)
                         backoff = BACKOFF_START_MS

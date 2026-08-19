@@ -10,8 +10,9 @@ fun Eventbase.init(
     config: EventbaseConfig,
     httpClient: HttpClient = HttpClient(),
 ): EventbaseClient {
+    val existing = current
     val client = init(config, UserDefaultsStorage(), httpClient)
-    if (config.autoLifecycle) observeLifecycle()
+    if (existing == null && config.autoLifecycle) observeLifecycle()
     return client
 }
 
