@@ -108,3 +108,34 @@ class LifecycleTest {
         assertEquals(false, sink.propsOf("app_backgrounded")["is_wake"])
     }
 }
+
+class LifecycleFlushTest {
+
+    @Test
+    fun backgroundFlushesEvenWithoutAForegroundInterval() = runTest {
+        var flushed = 0
+        val c = client(RecordingSink())
+        val t = LifecycleTracker(c, FakeClock()) { flushed++ }
+
+        t.onBackground()
+
+        assertEquals(1, flushed)
+    }
+
+    @Test
+    fun repeatedForegroundCallbacksDoNotShortenTheSession() = runTest {
+        val sink = RecordingSink()
+        val clock = FakeClock()
+        val c = client(sink)
+        val t = LifecycleTracker(c, clock) {}
+
+        t.onForeground()
+        clock.advance(60_000)
+        t.onForeground()
+        clock.advance(30_000)
+        t.onBackground()
+        c.flush()
+
+        assertEquals(90L, sink.propsOf("app_backgrounded")["duration_s"])
+    }
+}

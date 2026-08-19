@@ -4,12 +4,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -19,43 +17,57 @@ private const val KEY = "eventbase.queue"
 /**
  * 落盘队列。溢出丢最老、出队前丢弃过期事件——**自清窗口必须与服务端的拒收窗口同一个数**，
  * 否则客户端死攥老事件攒到最后也是被拒，白占队列白耗电。
+ *
+ * 所有状态变更走 [lock]：track 在调用方线程入队，flush 在后台协程出队。
  */
 internal class EventQueue(private val storage: Storage, private val clock: Clock) {
+    private val lock = Lock()
     private val items = ArrayDeque<QueuedEvent>()
 
     init {
         storage.get(KEY)?.let { items.addAll(decode(it)) }
     }
 
-    val size: Int get() = items.size
+    val size: Int get() = lock.withLock { items.size }
 
     fun add(event: QueuedEvent) {
-        items.addLast(event)
-        while (items.size > Limits.QUEUE_CAP) items.removeFirst()
-        persist()
+        lock.withLock {
+            items.addLast(event)
+            while (items.size > Limits.QUEUE_CAP) items.removeFirst()
+            persist()
+        }
     }
 
-    /** 取一批待发事件，同时把过期的清掉。 */
-    fun peek(limit: Int = Limits.BATCH): List<QueuedEvent> {
+    /**
+     * 取一批待发事件，同时把过期的清掉。
+     * 一批只取 [session] 与 [user] 相同的连续前缀——两者是批级字段，混批会错误归因。
+     */
+    fun peek(limit: Int = Limits.BATCH): List<QueuedEvent> = lock.withLock {
         purgeExpired()
-        return items.take(limit)
+        val head = items.firstOrNull() ?: return@withLock emptyList()
+        items.asSequence()
+            .take(limit)
+            .takeWhile { it.session == head.session && it.user == head.user }
+            .toList()
     }
 
     fun drop(count: Int) {
-        repeat(minOf(count, items.size)) { items.removeFirst() }
-        persist()
+        lock.withLock {
+            repeat(minOf(count, items.size)) { items.removeFirst() }
+            persist()
+        }
     }
 
-    fun snapshot(): List<QueuedEvent> = items.toList()
+    fun snapshot(): List<QueuedEvent> = lock.withLock { items.toList() }
 
+    /** 全量过滤而非只清队头：时钟没有单调性保证，回拨后过期事件可能排在新事件之后。 */
     private fun purgeExpired() {
         val cutoff = clock.now() - Limits.MAX_AGE_MS
-        var removed = false
-        while (items.isNotEmpty() && items.first().at < cutoff) {
-            items.removeFirst()
-            removed = true
-        }
-        if (removed) persist()
+        if (items.none { it.at < cutoff }) return
+        val kept = items.filter { it.at >= cutoff }
+        items.clear()
+        items.addAll(kept)
+        persist()
     }
 
     private fun persist() {
@@ -73,11 +85,32 @@ internal fun encode(events: Collection<QueuedEvent>): String =
                     put("name", JsonPrimitive(event.name))
                     put("at", JsonPrimitive(event.at))
                     event.flow?.let { put("flow", JsonPrimitive(it)) }
+                    put("session", JsonPrimitive(event.session))
+                    event.user?.let { put("user", JsonPrimitive(it)) }
                     put("props", encodeProps(event.props))
                 }
             )
         }
     }.toString()
+
+/**
+ * 入队即把属性摊平成标量。两个作用：调用方之后改自己的 map 或其中的可变值都影响不到
+ * 已入队的事件；内存里的值与落盘往返回来的值同型（整数一律 Long、小数一律 Double），
+ * 自定义 Sink 不会在重启前后看到不同类型。
+ */
+internal fun canonicalProps(props: Map<String, Any?>): Map<String, Any> = buildMap {
+    props.forEach { (key, value) ->
+        when (value) {
+            null -> Unit
+            is String -> put(key, value)
+            is Boolean -> put(key, value)
+            is Byte, is Short, is Int, is Long -> put(key, (value as Number).toLong())
+            is Float, is Double -> put(key, (value as Number).toDouble())
+            is Enum<*> -> put(key, value.name.lowercase())
+            else -> put(key, value.toString())
+        }
+    }
+}
 
 internal fun encodeProps(props: Map<String, Any?>): JsonObject =
     buildJsonObject {
@@ -93,18 +126,24 @@ internal fun encodeProps(props: Map<String, Any?>): JsonObject =
         }
     }
 
-private fun decode(raw: String): List<QueuedEvent> =
-    runCatching {
-        (json.parseToJsonElement(raw) as JsonArray).map { element ->
-            val obj = element.jsonObject
-            QueuedEvent(
-                name = obj["name"]!!.jsonPrimitive.content,
-                at = obj["at"]!!.jsonPrimitive.long(),
-                flow = obj["flow"]?.jsonPrimitive?.content,
-                props = obj["props"]?.jsonObject?.mapValues { (_, v) -> v.jsonPrimitive.scalar() } ?: emptyMap(),
-            )
-        }
-    }.getOrElse { emptyList() }
+/**
+ * 逐条解析：一条坏数据只丢它自己，不能带走整个队列。
+ * 缺字段的记录直接丢——本库尚未发版、无存量队列；**发版后再改字段必须带迁移**。
+ */
+private fun decode(raw: String): List<QueuedEvent> {
+    val array = runCatching { json.parseToJsonElement(raw) as JsonArray }.getOrNull() ?: return emptyList()
+    return array.mapNotNull { element -> runCatching { decodeOne(element.jsonObject) }.getOrNull() }
+}
+
+private fun decodeOne(obj: JsonObject): QueuedEvent =
+    QueuedEvent(
+        name = obj.getValue("name").jsonPrimitive.content,
+        at = obj.getValue("at").jsonPrimitive.long(),
+        flow = obj["flow"]?.jsonPrimitive?.content,
+        props = obj["props"]?.jsonObject?.mapValues { (_, v) -> v.jsonPrimitive.scalar() } ?: emptyMap(),
+        session = obj.getValue("session").jsonPrimitive.content,
+        user = obj["user"]?.jsonPrimitive?.content,
+    )
 
 private fun JsonPrimitive.long(): Long = longOrNull ?: content.toLong()
 

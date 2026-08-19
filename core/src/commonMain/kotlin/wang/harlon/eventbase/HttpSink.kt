@@ -1,6 +1,7 @@
 package wang.harlon.eventbase
 
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.expectSuccess
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -15,6 +16,8 @@ internal class HttpSink(private val client: HttpClient) : Sink {
 
     override suspend fun send(batch: Batch): SendResult {
         val response: HttpResponse = client.post("${batch.config.endpoint.trimEnd('/')}/e") {
+            // 消费方若全局开了 expectSuccess，4xx 会先抛异常 → 被判 RETRY → 无效事件永久卡队列
+            expectSuccess = false
             header("App-Key", batch.config.appKey)
             contentType(ContentType.Application.Json)
             setBody(body(batch))
