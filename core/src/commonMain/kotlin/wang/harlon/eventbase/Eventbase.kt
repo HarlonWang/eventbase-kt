@@ -40,8 +40,8 @@ object Eventbase {
         clock: Clock = systemClock(),
         scope: CoroutineScope? = null,
     ): EventbaseClient = install {
-        val owned = scope ?: defaultScope()
-        EventbaseClient(config, storage, sink, clock, owned) { if (scope == null) owned.cancel() }
+        val activeScope = scope ?: defaultScope()
+        EventbaseClient(config, storage, sink, clock, activeScope) { if (scope == null) activeScope.cancel() }
     }.client
 
     fun track(event: Event, flow: String? = null) {
@@ -114,10 +114,10 @@ internal fun installClient(
     scope: CoroutineScope? = null,
 ): Installed = Eventbase.install {
     // 只回收自己造的：调用方传进来的 client 与 scope 由调用方持有生命周期
-    val ownedClient = if (httpClient == null) defaultHttpClient() else null
+    val activeClient = httpClient ?: defaultHttpClient()
     val activeScope = scope ?: defaultScope()
-    EventbaseClient(config, storage, HttpSink(httpClient ?: ownedClient!!), clock, activeScope) {
-        ownedClient?.close()
+    EventbaseClient(config, storage, HttpSink(activeClient), clock, activeScope) {
+        if (httpClient == null) activeClient.close()
         if (scope == null) activeScope.cancel()
     }
 }

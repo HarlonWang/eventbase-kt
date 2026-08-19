@@ -7,8 +7,7 @@ vanniktechMavenPublish = "0.37.0"
 ktor = "3.5.2"
 kotlinx-serialization = "1.11.0"
 kotlinx-coroutines = "1.11.0"
-# 仅 androidMain：ProcessLifecycleOwner 自带 700ms 去抖，配置变更（旋转）不再切出假会话。
-# 过依赖准入的「业界权威库」四条判据：Google 维护、Central 签名、传递依赖仅 lifecycle-runtime、无安装脚本。
+# 仅 androidMain：ProcessLifecycleOwner 内置 700ms 去抖，配置变更不切出假会话。准入结论见 CLAUDE.md
 androidx-lifecycle = "2.11.0"
 
 [libraries]

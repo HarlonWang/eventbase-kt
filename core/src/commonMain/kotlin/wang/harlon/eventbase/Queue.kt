@@ -31,11 +31,17 @@ internal class EventQueue(private val storage: Storage, private val clock: Clock
     /** 自上次合并以来新入队的事件，单独落一个小 key——见 [persistAppend] */
     private val pending = mutableListOf<QueuedEvent>()
 
+    private var pendingOnDisk = false
+
     init {
         storage.get(KEY)?.let { items.addAll(decode(it)) }
-        val hadPending = storage.get(KEY_PENDING)?.also { items.addAll(decode(it)) } != null
-        // KEY_PENDING 是覆盖写，启动不合并则下次 add 会抹掉它（见 review-findings.md K18）
-        if (hadPending) persist()
+        // KEY_PENDING 是覆盖写：启动必须一并读回 pending，否则下次 add 会抹掉盘上这批（服务端仓 docs/review-findings.md K18）
+        storage.get(KEY_PENDING)?.let {
+            val restored = decode(it)
+            items.addAll(restored)
+            pending.addAll(restored)
+            pendingOnDisk = true
+        }
     }
 
     val size: Int get() = lock.withLock { items.size }
@@ -83,15 +89,20 @@ internal class EventQueue(private val storage: Storage, private val clock: Clock
         persist()
     }
 
-    /** 合并：base 写全量、pending 清空。两次写非原子，宁重勿丢；取舍见 review-findings.md */
+    /** 合并：base 写全量、pending 清空。两次写非原子，宁重勿丢；取舍见服务端仓 docs/review-findings.md */
     private fun persist() {
         if (items.isEmpty()) storage.remove(KEY) else storage.put(KEY, encode(items))
         pending.clear()
-        storage.remove(KEY_PENDING)
+        // 每次 remove 都是一次同步 commit，KEY_PENDING 不在盘上就别白花
+        if (pendingOnDisk) {
+            storage.remove(KEY_PENDING)
+            pendingOnDisk = false
+        }
     }
 
     private fun persistAppend() {
         storage.put(KEY_PENDING, encode(pending))
+        pendingOnDisk = true
     }
 }
 
