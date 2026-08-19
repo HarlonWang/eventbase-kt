@@ -14,7 +14,7 @@ fun Eventbase.init(
     val installed = installClient(config, UserDefaultsStorage(), httpClient)
     if (installed.isNew && config.autoLifecycle) {
         observeLifecycle()
-        Eventbase.lifecycleAttached = true
+        Eventbase.markLifecycleAttached()
     }
     return installed.client
 }

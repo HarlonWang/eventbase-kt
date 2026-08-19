@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 
 /** 全局门面。多 App 共用同一套接入形态：init 一次，之后到处 track。 */
 object Eventbase {
@@ -13,7 +14,12 @@ object Eventbase {
     private var client: EventbaseClient? = null
 
     /** 平台侧挂上生命周期观察者后置位；[reset] 据此决定要不要去摘 */
-    internal var lifecycleAttached = false
+    @Volatile
+    private var lifecycleAttached = false
+
+    internal fun markLifecycleAttached() {
+        lock.withLock { lifecycleAttached = true }
+    }
 
     val current: EventbaseClient?
         get() = client
@@ -65,10 +71,12 @@ object Eventbase {
     }
 
     fun reset() {
-        val attached = lock.withLock {
+        val (previous, attached) = lock.withLock {
+            val previous = client
             client = null
-            lifecycleAttached.also { lifecycleAttached = false }
+            previous to lifecycleAttached.also { lifecycleAttached = false }
         }
+        previous?.dispose()
         if (attached) detachLifecycle()
     }
 
@@ -95,7 +103,12 @@ internal fun installClient(
     clock: Clock = systemClock(),
     scope: CoroutineScope = defaultScope(),
 ): Installed = Eventbase.install {
-    EventbaseClient(config, storage, HttpSink(httpClient ?: defaultHttpClient()), clock, scope)
+    // 自己造的 client 与 scope 要自己收：reset 后重新 init 否则会泄漏连接池与 SupervisorJob
+    val owned = if (httpClient == null) defaultHttpClient() else null
+    EventbaseClient(config, storage, HttpSink(httpClient ?: owned!!), clock, scope) {
+        owned?.close()
+        scope.cancel()
+    }
 }
 
 /** 自带超时：卡住的上报会一直占着 flush 的锁，后续批次全被堵在后面。自带 client 的消费方需自行配置。 */

@@ -33,7 +33,10 @@ internal class EventQueue(private val storage: Storage, private val clock: Clock
 
     init {
         storage.get(KEY)?.let { items.addAll(decode(it)) }
-        storage.get(KEY_PENDING)?.let { items.addAll(decode(it)) }
+        val hadPending = storage.get(KEY_PENDING)?.also { items.addAll(decode(it)) } != null
+        // KEY_PENDING 是覆盖写而非追加。启动时若不立刻合并，重启后第一次 add() 会把
+        // 磁盘上这批事件抹成只剩新入队的那条，它们就只活在内存里了。
+        if (hadPending) persist()
     }
 
     val size: Int get() = lock.withLock { items.size }
@@ -82,7 +85,11 @@ internal class EventQueue(private val storage: Storage, private val clock: Clock
         persist()
     }
 
-    /** 合并：base 写全量，pending 清空 */
+    /**
+     * 合并：base 写全量，pending 清空。两次写不是原子的——中间被杀会让下次启动同时读到
+     * base 与旧 pending，**最多重复上报 24 条**。这个方向是有意的（宁重勿丢）；真要根治
+     * 需要事件带幂等 id 由服务端去重，属协议变更，记在 docs/review-findings.md。
+     */
     private fun persist() {
         if (items.isEmpty()) storage.remove(KEY) else storage.put(KEY, encode(items))
         pending.clear()

@@ -1,6 +1,8 @@
 package wang.harlon.eventbase
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -14,8 +16,8 @@ fun Eventbase.init(
     val installed = installClient(config, SharedPrefsStorage(context), httpClient)
     // 只在真正装上新实例时注册：重复 init 会叠加观察者，app_opened 就重复上报了
     if (installed.isNew && config.autoLifecycle) {
-        ProcessLifecycleOwner.get().lifecycle.addObserver(ForegroundObserver)
-        Eventbase.lifecycleAttached = true
+        onMainThread { ProcessLifecycleOwner.get().lifecycle.addObserver(ForegroundObserver) }
+        Eventbase.markLifecycleAttached()
     }
     return installed.client
 }
@@ -33,5 +35,18 @@ private object ForegroundObserver : DefaultLifecycleObserver {
 }
 
 internal actual fun detachLifecycle() {
-    ProcessLifecycleOwner.get().lifecycle.removeObserver(ForegroundObserver)
+    onMainThread { ProcessLifecycleOwner.get().lifecycle.removeObserver(ForegroundObserver) }
+}
+
+/**
+ * LifecycleRegistry 强制主线程，而 init/reset 完全可能在业务的 IO 协程里被调用；
+ * 消费方若移除了 androidx.startup 的 InitializationProvider，`get()` 本身也会抛。
+ * 埋点绝不能成为业务的故障源，故两层都兜住。
+ */
+private inline fun onMainThread(crossinline block: () -> Unit) {
+    if (Looper.myLooper() == Looper.getMainLooper()) {
+        runCatching { block() }
+    } else {
+        Handler(Looper.getMainLooper()).post { runCatching { block() } }
+    }
 }
