@@ -7,7 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 
 /** 全局门面。多 App 共用同一套接入形态：init 一次，之后到处 track。 */
 object Eventbase {
-    private val lock = Lock()
+    private val lock = createLock()
 
     @Volatile
     private var client: EventbaseClient? = null

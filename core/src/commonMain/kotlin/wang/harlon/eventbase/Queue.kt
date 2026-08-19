@@ -25,7 +25,7 @@ private const val COMPACT_AT = Limits.BATCH
  * 所有状态变更走 [lock]：track 在调用方线程入队，flush 在后台协程出队。
  */
 internal class EventQueue(private val storage: Storage, private val clock: Clock) {
-    private val lock = Lock()
+    private val lock = createLock()
     private val items = ArrayDeque<QueuedEvent>()
 
     /** 自上次合并以来新入队的事件，单独落一个小 key——见 [persistAppend] */
