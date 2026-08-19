@@ -53,7 +53,38 @@ class QueueTest {
         repeat(Limits.BATCH + 3) { c.track(TestEvent("e$it")) }
         c.flush()
 
+        assertEquals(listOf(Limits.BATCH, 3), sink.batches().map { it.size })
         assertEquals(Limits.BATCH + 3, sink.names.size)
+    }
+
+    /** pending 是覆盖写：重启后不先合并的话，第一次 add 会把磁盘上那批抹掉。 */
+    @Test
+    fun trackingAfterRestartKeepsPreviouslyPendingEventsOnDisk() = runTest {
+        val storage = MemoryStorage()
+        val before = client(FailingSink(), storage)
+        repeat(Limits.BATCH + 3) { before.track(TestEvent("e$it")) }
+
+        val restarted = client(FailingSink(), storage)
+        restarted.track(TestEvent("after_restart"))
+
+        // 再重启一次：只有真正落盘的才活得下来
+        val sink = RecordingSink()
+        client(sink, storage).flush()
+
+        assertEquals(Limits.BATCH + 4, sink.names.size)
+        assertEquals("after_restart", sink.names.last())
+    }
+
+    @Test
+    fun survivesRestartWhilePendingIsNotYetCompacted() = runTest {
+        val storage = MemoryStorage()
+        val c = client(FailingSink(), storage)
+        repeat(3) { c.track(TestEvent("e$it")) }
+
+        val sink = RecordingSink()
+        client(sink, storage).flush()
+
+        assertEquals(listOf("e0", "e1", "e2"), sink.names)
     }
 
     @Test

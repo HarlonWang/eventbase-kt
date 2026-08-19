@@ -2,10 +2,12 @@ package wang.harlon.eventbase
 
 import java.util.concurrent.locks.ReentrantLock
 
-internal actual class Lock actual constructor() {
+internal actual fun createLock(): Lock = ReentrantLockAdapter()
+
+private class ReentrantLockAdapter : Lock {
     private val delegate = ReentrantLock()
 
-    actual fun <T> withLock(block: () -> T): T {
+    override fun <T> withLock(block: () -> T): T {
         delegate.lock()
         try {
             return block()

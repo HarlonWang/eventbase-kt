@@ -1,15 +1,25 @@
 package wang.harlon.eventbase
 
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeout
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 
 /** 全局门面。多 App 共用同一套接入形态：init 一次，之后到处 track。 */
 object Eventbase {
-    private val lock = Lock()
+    private val lock = createLock()
 
     @Volatile
     private var client: EventbaseClient? = null
+
+    /** 平台侧挂上生命周期观察者后置位；[reset] 据此决定要不要去摘 */
+    @Volatile
+    private var lifecycleAttached = false
+
+    internal fun markLifecycleAttached() {
+        lock.withLock { lifecycleAttached = true }
+    }
 
     val current: EventbaseClient?
         get() = client
@@ -19,7 +29,7 @@ object Eventbase {
         storage: Storage,
         httpClient: HttpClient? = null,
         clock: Clock = systemClock(),
-        scope: CoroutineScope = defaultScope(),
+        scope: CoroutineScope? = null,
     ): EventbaseClient = installClient(config, storage, httpClient, clock, scope).client
 
     /** 测试入口：事件只进 sink，不发网络。 */
@@ -28,8 +38,11 @@ object Eventbase {
         config: EventbaseConfig = testConfig(),
         storage: Storage = MemoryStorage(),
         clock: Clock = systemClock(),
-        scope: CoroutineScope = defaultScope(),
-    ): EventbaseClient = install { EventbaseClient(config, storage, sink, clock, scope) }.client
+        scope: CoroutineScope? = null,
+    ): EventbaseClient = install {
+        val activeScope = scope ?: defaultScope()
+        EventbaseClient(config, storage, sink, clock, activeScope) { if (scope == null) activeScope.cancel() }
+    }.client
 
     fun track(event: Event, flow: String? = null) {
         client?.track(event, flow)
@@ -60,8 +73,21 @@ object Eventbase {
         client?.lifecycle?.onBackground()
     }
 
+    /**
+     * 拆掉当前实例。**面向测试与退出清理，不保证与并发 init 竞争下的正确性**——
+     * 摘除放在锁内是为了不与 init 的注册交错（平台侧注册也走同一把锁的调用方）。
+     */
     fun reset() {
-        lock.withLock { client = null }
+        val previous = lock.withLock {
+            val previous = client
+            client = null
+            if (lifecycleAttached) {
+                lifecycleAttached = false
+                detachLifecycle()
+            }
+            previous
+        }
+        previous?.dispose()
     }
 
     /**
@@ -85,9 +111,24 @@ internal fun installClient(
     storage: Storage,
     httpClient: HttpClient?,
     clock: Clock = systemClock(),
-    scope: CoroutineScope = defaultScope(),
+    scope: CoroutineScope? = null,
 ): Installed = Eventbase.install {
-    EventbaseClient(config, storage, HttpSink(httpClient ?: HttpClient()), clock, scope)
+    // 只回收自己造的：调用方传进来的 client 与 scope 由调用方持有生命周期
+    val activeClient = httpClient ?: defaultHttpClient()
+    val activeScope = scope ?: defaultScope()
+    EventbaseClient(config, storage, HttpSink(activeClient), clock, activeScope) {
+        if (httpClient == null) activeClient.close()
+        if (scope == null) activeScope.cancel()
+    }
+}
+
+/** 自带超时：卡住的上报会一直占着 flush 的锁，后续批次全被堵在后面。自带 client 的消费方需自行配置。 */
+private fun defaultHttpClient() = HttpClient {
+    install(HttpTimeout) {
+        connectTimeoutMillis = 10_000
+        requestTimeoutMillis = 20_000
+        socketTimeoutMillis = 20_000
+    }
 }
 
 private fun testConfig() =

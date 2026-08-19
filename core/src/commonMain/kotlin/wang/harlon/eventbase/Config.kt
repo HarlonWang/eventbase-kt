@@ -8,7 +8,7 @@ data class EventbaseConfig(
     val channel: String = "unknown",
     val locale: String = "unknown",
     val isDebug: Boolean = false,
-    /** 攒够这么多条就 flush；进后台与定时也会触发 */
+    /** 攒够这么多条就 flush；进后台也会触发（需 [autoLifecycle]）。刻意没有定时器，见 README */
     val flushAt: Int = 10,
     val logEvents: Boolean = false,
     /** 自动上报 app_opened / app_backgrounded，并在进后台时 flush */

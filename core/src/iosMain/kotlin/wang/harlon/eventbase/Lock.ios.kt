@@ -2,10 +2,12 @@ package wang.harlon.eventbase
 
 import platform.Foundation.NSRecursiveLock
 
-internal actual class Lock actual constructor() {
+internal actual fun createLock(): Lock = NSRecursiveLockAdapter()
+
+private class NSRecursiveLockAdapter : Lock {
     private val delegate = NSRecursiveLock()
 
-    actual fun <T> withLock(block: () -> T): T {
+    override fun <T> withLock(block: () -> T): T {
         delegate.lock()
         try {
             return block()

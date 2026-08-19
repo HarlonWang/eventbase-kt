@@ -24,6 +24,7 @@ class EventbaseClient internal constructor(
     private val sink: Sink,
     private val clock: Clock,
     private val scope: CoroutineScope,
+    private val onDispose: () -> Unit = {},
 ) {
     private val queue = EventQueue(storage, clock)
     private val mutex = Mutex()
@@ -97,6 +98,8 @@ class EventbaseClient internal constructor(
     }
 
     internal fun queued(): List<QueuedEvent> = queue.snapshot()
+
+    internal fun dispose() = onDispose()
 
     private fun log(event: Event) = println("[eventbase] ${event.name} ${event.props}")
 }

@@ -5,6 +5,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -29,8 +31,10 @@ class ResilienceTest {
         good.track(TestEvent("kept_one"))
         good.track(TestEvent("kept_two"))
 
-        val raw = storage.get("eventbase.queue")!!
-        storage.put("eventbase.queue", raw.replaceFirst("{\"name\":\"kept_one\"", "{\"nome\":\"kept_one\""))
+        // 未合并前事件在 pending key 里，合并后在 base key，测试对两种布局都成立
+        val key = listOf("eventbase.queue", "eventbase.queue.pending").first { storage.get(it) != null }
+        val raw = storage.get(key)!!
+        storage.put(key, raw.replaceFirst("{\"name\":\"kept_one\"", "{\"nome\":\"kept_one\""))
 
         val sink = RecordingSink()
         client(sink, storage).flush()
@@ -76,11 +80,9 @@ class ResilienceTest {
         Eventbase.reset()
         try {
             val storage = MemoryStorage()
-            val installed = mutableListOf<EventbaseClient>()
-            withContext(Dispatchers.Default) {
-                repeat(50) {
-                    launch { installed += Eventbase.initForTest(RecordingSink(), storage = storage) }
-                }
+            // 收集不能用共享的 MutableList：Native 上 50 个线程并发 add 会撕裂出 null 空槽
+            val installed = withContext(Dispatchers.Default) {
+                List(50) { async { Eventbase.initForTest(RecordingSink(), storage = storage) } }.awaitAll()
             }
 
             assertEquals(1, installed.distinct().size)

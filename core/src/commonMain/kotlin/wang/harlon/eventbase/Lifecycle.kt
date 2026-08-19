@@ -1,8 +1,7 @@
 package wang.harlon.eventbase
 
-internal data class AppOpened(val isCold: Boolean) : Event {
+internal object AppOpened : Event {
     override val name = "app_opened"
-    override val props = mapOf("is_cold" to isCold)
 }
 
 internal data class AppBackgrounded(val durationSeconds: Long, val isWake: Boolean) : Event {
@@ -29,7 +28,7 @@ internal class LifecycleTracker(
         if (!opened) {
             opened = true
             wokenInBackground = client.trackedAnything
-            client.track(AppOpened(isCold = true))
+            client.track(AppOpened)
         }
         if (foregroundAt == 0L) foregroundAt = clock.now()
     }
