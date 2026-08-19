@@ -4,7 +4,10 @@
 
 强类型事件定义、落盘队列、批量上报、生命周期自动埋点。协议契约以服务端仓的 [`docs/protocol.md`](https://github.com/HarlonWang/eventbase/blob/main/docs/protocol.md) 为唯一权威。
 
-> ⚠️ **状态：建仓阶段，实现未开始（2026-08-18）。** 本文描述的是已定稿的接入形态与 API 意图，代码尚未落地。
+> **状态（2026-08-19）**：核心已实现——install_id、落盘队列、批量上报、退避重试、flow 串联、
+> 强类型事件、`RecordingSink` 测试替身（17 个测试，Android host + iOS 两端编译通过）。
+> **尚未实现**：生命周期自动事件（`app_opened` / `app_backgrounded`）、定时 flush。
+> 本文第 3 节「后台唤醒」与第 4 节「生命周期事件」描述的是目标形态，那部分还没落地。
 
 ## 接入面只有 4 个 API
 
