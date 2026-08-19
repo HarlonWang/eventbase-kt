@@ -29,7 +29,7 @@ object Eventbase {
         storage: Storage,
         httpClient: HttpClient? = null,
         clock: Clock = systemClock(),
-        scope: CoroutineScope = defaultScope(),
+        scope: CoroutineScope? = null,
     ): EventbaseClient = installClient(config, storage, httpClient, clock, scope).client
 
     /** 测试入口：事件只进 sink，不发网络。 */
@@ -38,8 +38,11 @@ object Eventbase {
         config: EventbaseConfig = testConfig(),
         storage: Storage = MemoryStorage(),
         clock: Clock = systemClock(),
-        scope: CoroutineScope = defaultScope(),
-    ): EventbaseClient = install { EventbaseClient(config, storage, sink, clock, scope) }.client
+        scope: CoroutineScope? = null,
+    ): EventbaseClient = install {
+        val owned = scope ?: defaultScope()
+        EventbaseClient(config, storage, sink, clock, owned) { if (scope == null) owned.cancel() }
+    }.client
 
     fun track(event: Event, flow: String? = null) {
         client?.track(event, flow)
@@ -70,14 +73,21 @@ object Eventbase {
         client?.lifecycle?.onBackground()
     }
 
+    /**
+     * 拆掉当前实例。**面向测试与退出清理，不保证与并发 init 竞争下的正确性**——
+     * 摘除放在锁内是为了不与 init 的注册交错（平台侧注册也走同一把锁的调用方）。
+     */
     fun reset() {
-        val (previous, attached) = lock.withLock {
+        val previous = lock.withLock {
             val previous = client
             client = null
-            previous to lifecycleAttached.also { lifecycleAttached = false }
+            if (lifecycleAttached) {
+                lifecycleAttached = false
+                detachLifecycle()
+            }
+            previous
         }
         previous?.dispose()
-        if (attached) detachLifecycle()
     }
 
     /**
@@ -101,13 +111,14 @@ internal fun installClient(
     storage: Storage,
     httpClient: HttpClient?,
     clock: Clock = systemClock(),
-    scope: CoroutineScope = defaultScope(),
+    scope: CoroutineScope? = null,
 ): Installed = Eventbase.install {
-    // 自己造的 client 与 scope 要自己收：reset 后重新 init 否则会泄漏连接池与 SupervisorJob
-    val owned = if (httpClient == null) defaultHttpClient() else null
-    EventbaseClient(config, storage, HttpSink(httpClient ?: owned!!), clock, scope) {
-        owned?.close()
-        scope.cancel()
+    // 只回收自己造的：调用方传进来的 client 与 scope 由调用方持有生命周期
+    val ownedClient = if (httpClient == null) defaultHttpClient() else null
+    val activeScope = scope ?: defaultScope()
+    EventbaseClient(config, storage, HttpSink(httpClient ?: ownedClient!!), clock, activeScope) {
+        ownedClient?.close()
+        if (scope == null) activeScope.cancel()
     }
 }
 

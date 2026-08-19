@@ -34,8 +34,7 @@ internal class EventQueue(private val storage: Storage, private val clock: Clock
     init {
         storage.get(KEY)?.let { items.addAll(decode(it)) }
         val hadPending = storage.get(KEY_PENDING)?.also { items.addAll(decode(it)) } != null
-        // KEY_PENDING 是覆盖写而非追加。启动时若不立刻合并，重启后第一次 add() 会把
-        // 磁盘上这批事件抹成只剩新入队的那条，它们就只活在内存里了。
+        // KEY_PENDING 是覆盖写，启动不合并则下次 add 会抹掉它（见 review-findings.md K18）
         if (hadPending) persist()
     }
 
@@ -47,8 +46,7 @@ internal class EventQueue(private val storage: Storage, private val clock: Clock
             val overflowed = items.size > Limits.QUEUE_CAP
             while (items.size > Limits.QUEUE_CAP) items.removeFirst()
             pending += event
-            // 队满丢了队头，或 pending 攒够了，才重写整个 base；其余情况只追加一个小 key。
-            // 每次 track 都全量序列化 500 条的话，开销会落在调用方线程上。
+            // 只在队满丢头或 pending 攒够时才重写 base，避免每次 track 都全量序列化
             if (overflowed || pending.size >= COMPACT_AT) persist() else persistAppend()
         }
     }
@@ -85,11 +83,7 @@ internal class EventQueue(private val storage: Storage, private val clock: Clock
         persist()
     }
 
-    /**
-     * 合并：base 写全量，pending 清空。两次写不是原子的——中间被杀会让下次启动同时读到
-     * base 与旧 pending，**最多重复上报 24 条**。这个方向是有意的（宁重勿丢）；真要根治
-     * 需要事件带幂等 id 由服务端去重，属协议变更，记在 docs/review-findings.md。
-     */
+    /** 合并：base 写全量、pending 清空。两次写非原子，宁重勿丢；取舍见 review-findings.md */
     private fun persist() {
         if (items.isEmpty()) storage.remove(KEY) else storage.put(KEY, encode(items))
         pending.clear()

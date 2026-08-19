@@ -132,7 +132,7 @@ debug 构建自动带 `is_debug=1`（服务端照收、分析默认过滤）；`
 | 能力 | 行为 |
 |---|---|
 | 离线队列 | 落盘、上限 500 条、满了丢最老、出队前丢弃超过 7 天的事件 |
-| flush 时机 | 进后台、攒够 `flushAt`；**刻意没有定时器**，进程被杀不丢已入队事件 |
+| flush 时机 | 进后台（需 `autoLifecycle = true`）、攒够 `flushAt`；**刻意没有定时器**，进程被杀不丢已入队事件 |
 | 失败重试 | 指数退避；4xx 与 204 一律出队（服务端已判定，重试无意义） |
 | install_id | 首次启动生成，卸载重装才变，**不取任何设备标识符** |
 | 自动属性 | app_version / platform / channel / sys_locale / is_debug / session |
