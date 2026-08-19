@@ -15,7 +15,7 @@
 ## 铁律
 
 - **依赖准入**：common 只有 ktor-client-core + kotlinx-serialization-json + kotlinx-coroutines-core，engine 由消费方提供；androidMain 另有 `androidx.lifecycle:lifecycle-process`。加任何依赖前先过服务端仓 CLAUDE.md 的「依赖准入」判据。
-  - `lifecycle-process` 的准入结论（2026-08-19，**判据③不满足的明示例外，待拍板**）：判据①②④过——Google 维护的 AndroidX 事实标准、Maven Central 签名发布、无安装脚本；**判据③（传递依赖 ≤ 2）不满足**，实际拖进 `androidx.annotation`、`lifecycle-runtime`（→`lifecycle-common`）、`androidx.startup:startup-runtime`、`kotlin-stdlib` 四项。
+  - `lifecycle-process` 的准入结论（2026-08-19，**判据③不满足的明示例外，已拍板接受**）：判据①②④过——Google 维护的 AndroidX 事实标准、Maven Central 签名发布、无安装脚本；**判据③（传递依赖 ≤ 2）不满足**，实际拖进 `androidx.annotation`、`lifecycle-runtime`（→`lifecycle-common`）、`androidx.startup:startup-runtime`、`kotlin-stdlib` 四项。
     - 其中 `startup-runtime` 会通过 `ProcessLifecycleInitializer` 走 `InitializationProvider` 自动初始化；**消费方若移除该 provider，`ProcessLifecycleOwner.get()` 会抛**——`detachLifecycle`/attach 两处已用 runCatching + 主线程 post 兜住。
     - 记为例外而非改判据的理由：自己数 Activity 数不出配置变更（旋转时 started 计数归零再加一，必然切出假会话），`ProcessLifecycleOwner` 内置的 700ms 去抖是唯一正确口径来源，自己实现等于复刻它。
 - **注释准入**：「为什么」写进服务端仓的 docs，「是什么」靠命名，注释只留「反直觉」。四类允许（反直觉约束 / 外部契约 / 踩坑一行 + 日期 / 公共 API 的 KDoc）；禁止复述代码、抄设计论证、分节横幅；超过 3 行的解释改成一行指针。**边界**：本规则只适用于本仓与 eventbase，改消费方时沿用各自风格。
