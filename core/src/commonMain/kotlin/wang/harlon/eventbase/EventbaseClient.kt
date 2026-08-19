@@ -47,8 +47,7 @@ class EventbaseClient internal constructor(
 
     fun track(event: Event, flow: String? = null) {
         trackedAnything = true
-        // props 复制一份：调用方之后改自己的 map 不能影响已入队的事件
-        queue.add(QueuedEvent(event.name, clock.now(), flow, event.props.toMap(), sessionId, userId))
+        queue.add(QueuedEvent(event.name, clock.now(), flow, canonicalProps(event.props), sessionId, userId))
         if (config.logEvents) log(event)
         if (queue.size >= config.flushAt) scope.launch { flush() }
     }

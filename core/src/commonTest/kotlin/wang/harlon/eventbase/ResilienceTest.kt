@@ -60,11 +60,45 @@ class ResilienceTest {
     @Test
     fun repeatedInitReturnsTheSameClient() {
         Eventbase.reset()
-        val storage = MemoryStorage()
-        val first = Eventbase.initForTest(RecordingSink(), storage = storage)
-        val second = Eventbase.initForTest(RecordingSink(), storage = storage)
+        try {
+            val storage = MemoryStorage()
+            val first = Eventbase.initForTest(RecordingSink(), storage = storage)
+            val second = Eventbase.initForTest(RecordingSink(), storage = storage)
 
-        assertSame(first, second)
+            assertSame(first, second)
+        } finally {
+            Eventbase.reset()
+        }
+    }
+
+    @Test
+    fun concurrentInitInstallsExactlyOneClient() = runTest {
         Eventbase.reset()
+        try {
+            val storage = MemoryStorage()
+            val installed = mutableListOf<EventbaseClient>()
+            withContext(Dispatchers.Default) {
+                repeat(50) {
+                    launch { installed += Eventbase.initForTest(RecordingSink(), storage = storage) }
+                }
+            }
+
+            assertEquals(1, installed.distinct().size)
+        } finally {
+            Eventbase.reset()
+        }
+    }
+
+    @Test
+    fun mutableNestedPropertyValuesAreSnapshotted() = runTest {
+        val sink = RecordingSink()
+        val c = client(sink)
+        val tags = mutableListOf("a")
+
+        c.track(TestEvent("content_opened", mapOf("tags" to tags)))
+        tags += "b"
+        c.flush()
+
+        assertEquals("[a]", sink.propsOf("content_opened")["tags"])
     }
 }

@@ -8,12 +8,11 @@ import platform.UIKit.UIApplicationDidEnterBackgroundNotification
 
 fun Eventbase.init(
     config: EventbaseConfig,
-    httpClient: HttpClient = HttpClient(),
+    httpClient: HttpClient? = null,
 ): EventbaseClient {
-    val existing = current
-    val client = init(config, UserDefaultsStorage(), httpClient)
-    if (existing == null && config.autoLifecycle) observeLifecycle()
-    return client
+    val installed = installClient(config, UserDefaultsStorage(), httpClient)
+    if (installed.isNew && config.autoLifecycle) observeLifecycle()
+    return installed.client
 }
 
 private fun observeLifecycle() {

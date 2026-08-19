@@ -13,11 +13,11 @@ class ClientTest {
         val sink = RecordingSink()
         val c = client(sink)
 
-        c.track(TestEvent("content_opened", mapOf("source" to "github", "rank" to 3)))
+        c.track(TestEvent("content_opened", mapOf("source" to "github", "rank" to 3L)))
         c.flush()
 
         assertEquals(listOf("content_opened"), sink.names)
-        assertEquals(mapOf("source" to "github", "rank" to 3), sink.propsOf("content_opened"))
+        assertEquals(mapOf("source" to "github", "rank" to 3L), sink.propsOf("content_opened"))
     }
 
     @Test

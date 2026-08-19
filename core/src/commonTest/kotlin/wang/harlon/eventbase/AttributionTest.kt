@@ -61,6 +61,6 @@ class AttributionTest {
         props["rank"] = 999
         c.flush()
 
-        assertEquals(1, sink.propsOf("content_opened")["rank"])
+        assertEquals(1L, sink.propsOf("content_opened")["rank"])
     }
 }

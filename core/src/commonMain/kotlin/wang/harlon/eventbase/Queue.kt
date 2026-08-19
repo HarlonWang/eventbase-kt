@@ -93,6 +93,25 @@ internal fun encode(events: Collection<QueuedEvent>): String =
         }
     }.toString()
 
+/**
+ * 入队即把属性摊平成标量。两个作用：调用方之后改自己的 map 或其中的可变值都影响不到
+ * 已入队的事件；内存里的值与落盘往返回来的值同型（整数一律 Long、小数一律 Double），
+ * 自定义 Sink 不会在重启前后看到不同类型。
+ */
+internal fun canonicalProps(props: Map<String, Any?>): Map<String, Any> = buildMap {
+    props.forEach { (key, value) ->
+        when (value) {
+            null -> Unit
+            is String -> put(key, value)
+            is Boolean -> put(key, value)
+            is Byte, is Short, is Int, is Long -> put(key, (value as Number).toLong())
+            is Float, is Double -> put(key, (value as Number).toDouble())
+            is Enum<*> -> put(key, value.name.lowercase())
+            else -> put(key, value.toString())
+        }
+    }
+}
+
 internal fun encodeProps(props: Map<String, Any?>): JsonObject =
     buildJsonObject {
         props.forEach { (key, value) ->
@@ -107,7 +126,10 @@ internal fun encodeProps(props: Map<String, Any?>): JsonObject =
         }
     }
 
-/** 逐条解析：一条坏数据只丢它自己，不能带走整个队列。 */
+/**
+ * 逐条解析：一条坏数据只丢它自己，不能带走整个队列。
+ * 缺字段的记录直接丢——本库尚未发版、无存量队列；**发版后再改字段必须带迁移**。
+ */
 private fun decode(raw: String): List<QueuedEvent> {
     val array = runCatching { json.parseToJsonElement(raw) as JsonArray }.getOrNull() ?: return emptyList()
     return array.mapNotNull { element -> runCatching { decodeOne(element.jsonObject) }.getOrNull() }

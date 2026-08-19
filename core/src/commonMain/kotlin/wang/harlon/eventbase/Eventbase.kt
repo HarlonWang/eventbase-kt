@@ -6,6 +6,8 @@ import kotlinx.coroutines.CoroutineScope
 
 /** 全局门面。多 App 共用同一套接入形态：init 一次，之后到处 track。 */
 object Eventbase {
+    private val lock = Lock()
+
     @Volatile
     private var client: EventbaseClient? = null
 
@@ -15,10 +17,10 @@ object Eventbase {
     fun init(
         config: EventbaseConfig,
         storage: Storage,
-        httpClient: HttpClient = HttpClient(),
+        httpClient: HttpClient? = null,
         clock: Clock = systemClock(),
         scope: CoroutineScope = defaultScope(),
-    ): EventbaseClient = install { EventbaseClient(config, storage, HttpSink(httpClient), clock, scope) }
+    ): EventbaseClient = installClient(config, storage, httpClient, clock, scope).client
 
     /** 测试入口：事件只进 sink，不发网络。 */
     fun initForTest(
@@ -27,7 +29,7 @@ object Eventbase {
         storage: Storage = MemoryStorage(),
         clock: Clock = systemClock(),
         scope: CoroutineScope = defaultScope(),
-    ): EventbaseClient = install { EventbaseClient(config, storage, sink, clock, scope) }
+    ): EventbaseClient = install { EventbaseClient(config, storage, sink, clock, scope) }.client
 
     fun track(event: Event, flow: String? = null) {
         client?.track(event, flow)
@@ -59,17 +61,33 @@ object Eventbase {
     }
 
     fun reset() {
-        client = null
+        lock.withLock { client = null }
     }
 
     /**
-     * **先到先得**：已装好就返回既有实例，不构造第二个。两个 EventbaseClient 各持一份内存队列
-     * 却共用同一份 Storage，`persist()` 会互相覆盖，直接丢事件。测试用 [reset] 解除。
+     * **先到先得**，读-建-写在同一把锁内：两个 EventbaseClient 各持一份内存队列却共用
+     * 同一份 Storage，`persist()` 会互相覆盖、直接丢事件。[Installed.isNew] 让平台侧
+     * 能恰好注册一次生命周期观察者。
      */
-    private fun install(create: () -> EventbaseClient): EventbaseClient {
-        client?.let { return it }
-        return create().also { client = it }
+    internal fun install(create: () -> EventbaseClient): Installed = lock.withLock {
+        client?.let { return@withLock Installed(it, isNew = false) }
+        val created = create()
+        client = created
+        Installed(created, isNew = true)
     }
+}
+
+internal data class Installed(val client: EventbaseClient, val isNew: Boolean)
+
+/** 默认 HttpClient 在锁内、确认要建实例时才构造——重复 init 不该造出一个没人 close 的客户端。 */
+internal fun installClient(
+    config: EventbaseConfig,
+    storage: Storage,
+    httpClient: HttpClient?,
+    clock: Clock = systemClock(),
+    scope: CoroutineScope = defaultScope(),
+): Installed = Eventbase.install {
+    EventbaseClient(config, storage, HttpSink(httpClient ?: HttpClient()), clock, scope)
 }
 
 private fun testConfig() =
