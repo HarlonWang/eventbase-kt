@@ -52,6 +52,28 @@ class AttributionTest {
     }
 
     @Test
+    fun everyEventGetsItsOwnId() = runTest {
+        val c = client(RecordingSink())
+        repeat(3) { c.track(TestEvent("app_opened")) }
+
+        assertEquals(3, c.queued().map { it.id }.distinct().size)
+    }
+
+    /** 重传必须复用同一个 id，否则服务端永远没法把重复项认出来 */
+    @Test
+    fun idSurvivesRestartAndRetry() = runTest {
+        val storage = MemoryStorage()
+        val first = client(FailingSink(), storage)
+        first.track(TestEvent("app_opened"))
+        val originalId = first.queued().single().id
+
+        val sink = RecordingSink()
+        client(sink, storage).flush()
+
+        assertEquals(originalId, sink.idOf("app_opened"))
+    }
+
+    @Test
     fun callerCannotMutatePropsAfterTracking() = runTest {
         val sink = RecordingSink()
         val c = client(sink)

@@ -20,7 +20,7 @@ class BodyTest {
             user = "identity-1",
             config = testConfig(),
             events = listOf(
-                QueuedEvent("app_opened", 1_700_000_000_000, "flow-1", mapOf("is_cold" to true), "session-1", "identity-1")
+                QueuedEvent("event-1", "app_opened", 1_700_000_000_000, "flow-1", mapOf("is_cold" to true), "session-1", "identity-1")
             ),
         )
 
@@ -38,6 +38,7 @@ class BodyTest {
         assertEquals(false, sys["debug"]!!.jsonPrimitive.boolean)
 
         val event = json["events"]!!.jsonArray.single().jsonObject
+        assertEquals("event-1", event["id"]!!.jsonPrimitive.content)
         assertEquals("app_opened", event["name"]!!.jsonPrimitive.content)
         assertEquals(1_700_000_000_000, event["at"]!!.jsonPrimitive.long)
         assertEquals("flow-1", event["flow"]!!.jsonPrimitive.content)
