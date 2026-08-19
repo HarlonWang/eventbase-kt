@@ -123,9 +123,29 @@ assertEquals(listOf("tab_switched"), recorder.names)
 assertEquals(mapOf("tab" to "me", "method" to "tap"), recorder.propsOf("tab_switched"))
 ```
 
-### 调试
+### 调试与上线前对账
 
-debug 构建自动带 `is_debug=1`（服务端照收、分析默认过滤）；`logEvents = true` 把每条事件打进日志。
+debug 构建自动带 `is_debug=1`（服务端照收、分析默认过滤）。`logEvents = true` 打开诊断日志：
+
+```bash
+adb logcat -s eventbase:D      # iOS 侧走 NSLog，Console.app 里搜 [eventbase]
+```
+
+三类日志，合起来能把「丢在哪一段」定位出来：
+
+```
+track content_opened {source=github, rank=3}      入队
+POST /e -> 204 (3 events)                          服务端回了什么
+flush 3 sent, queued=0                             出队，队列剩多少
+flush 3 kept, retry in 5000ms, queued=3            留队，下次重试间隔
+```
+
+**为什么需要它**：服务端只知道「收到了什么」，与客户端「本来要发什么」之差就是丢失，
+但分不清是没 track 还是传丢了。logcat 补的正是这一段；服务端那侧由 `ingest_drops`
+（按天按原因记账）补主动丢弃。三者对齐才能把丢失归因到 **没 track / 传丢了 / 服务端拒了**。
+
+冒烟演练（断网点 5 下 → 恢复）应看到：5 条 track、`flush 5 kept`、`queued=5`；恢复后
+`POST /e -> 204`、`flush 5 sent`、`queued=0`；最后用取数接口查出这 5 条。**三处数字一致才算通过。**
 
 ## 4. 库负责的事
 
