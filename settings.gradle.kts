@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "eventbase-kt"
 
-include(":core")
+include(":library")
