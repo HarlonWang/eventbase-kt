@@ -28,5 +28,7 @@
 首个消费方 TrendingAI 已接入（composite build，`local.properties` 的 `eventbase-kt.dir`）。
 落地顺序见服务端仓 README 的「状态」。
 
-⚠️ **尚未发布 Maven Central**。TrendingAI 的 CI（打 tag 发版）只认 `libs.versions.toml` 里的坐标，
-所以**它发版之前本库必须先发 0.1.0**。
+**0.1.0 已发布 Maven Central**（2026-08-20）。发版靠打裸版本号 tag 触发 `publish.yml`：
+测试 → `publishAndReleaseToMavenCentral` → 建 Release。**Maven Central 的版本发出去就删不掉也覆盖不了**，
+发错只能发下一个版本号，故 tag 前务必确认 workflow 里的任务名在本仓真实存在（0.1.0 前就踩过一次：
+publish.yml 抄自 loginbase-kt，带着本仓没有的 `:browser` 模块）。
