@@ -25,7 +25,8 @@
 ## 当前状态
 
 **核心与生命周期已实现，45 个测试（Android host）+ iOS 两 target 编译通过**（2026-08-19）。
-首个消费方 TrendingAI 已接入（composite build，`local.properties` 的 `eventbase-kt.dir`）。
+首个消费方 TrendingAI 已接入（composite build，`local.properties` 的 `eventbase-kt.dir`）；
+坐标到项目路径的映射是给消费方的契约，写在 `gradle/composite-substitutions`，**改模块名要同步改它**。
 落地顺序见服务端仓 README 的「状态」。
 
 **0.1.0 已发布 Maven Central**（2026-08-20）。发版靠打裸版本号 tag 触发 `publish.yml`：
