@@ -44,6 +44,12 @@ Eventbase.init(
 消费方若已有一个安装级标识（TrendingAI 拿它当 chat 配额的 `X-Install-Id`），传进来，
 客户端事件才能和服务端按同一个 id 补发的事件（配额拦截、成单）串成一条漏斗；不传就由库自己生成。
 
+`deviceId`（可选）随每批上报透传。**库自己绝不采集设备标识符**——ANDROID_ID / IDFV 会牵出
+Play 数据安全、App Store 隐私标签、GDPR 的单独申报，默认带上等于让所有接入方都背这份义务；
+而库也拿不到「正确」的那个值（ANDROID_ID 按签名密钥隔离、模拟器有固定串，IDFV 全卸载即重置），
+消费方侧本来就有权威源。要用就自己传并自行申报。它**不作 DAU 去重单位**，用途是与安装数相比
+得出重装率——口径见服务端仓 `docs/telemetry-design.md`。
+
 Android 侧会自动注册 `ActivityLifecycleCallbacks`、iOS 侧注册 `NSNotificationCenter` 观察者，
 `app_opened` / `app_backgrounded` 无需接入方写一行代码（`autoLifecycle = false` 可关）。
 
@@ -160,6 +166,7 @@ flush 3 kept, retry in 5000ms, queued=3            留队，下次重试间隔
 | flush 时机 | 进后台（需 `autoLifecycle = true`）、攒够 `flushAt`；**刻意没有定时器**，进程被杀不丢已入队事件 |
 | 失败重试 | 指数退避；4xx 与 204 一律出队（服务端已判定，重试无意义） |
 | install_id | 首次启动生成，卸载重装才变，**不取任何设备标识符** |
+| device_id | 只透传消费方传入的 `deviceId`，**库不采集也不推导**；不传则上报体无此字段 |
 | 自动属性 | app_version / platform / channel / sys_locale / is_debug / session |
 | 生命周期事件 | `app_opened` / `app_backgrounded`（含 `duration_s`），接入方零代码 |
 

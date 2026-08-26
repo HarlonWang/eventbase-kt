@@ -18,6 +18,11 @@ data class EventbaseConfig(
      * 用于让客户端事件与服务端按业务 install_id 补发的事件（配额拦截、成单）串得起来。
      */
     val installId: String? = null,
+    /**
+     * 设备级标识，随每批上报透传；不传则上报体里没有这个字段。
+     * **库不采集也不推导**，只透传此处传入的值——取舍与分析口径见服务端仓 `docs/telemetry-design.md`。
+     */
+    val deviceId: String? = null,
 )
 
 internal object Limits {

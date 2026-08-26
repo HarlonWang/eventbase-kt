@@ -29,6 +29,8 @@ class BodyTest {
         assertEquals("install-1", json["install"]!!.jsonPrimitive.content)
         assertEquals("session-1", json["session"]!!.jsonPrimitive.content)
         assertEquals("identity-1", json["user"]!!.jsonPrimitive.content)
+        // 消费方没传设备标识时，上报体里根本不该出现这个字段
+        assertEquals(null, json["device"])
 
         val sys = json["sys"]!!.jsonObject
         assertEquals("1.3.0", sys["version"]!!.jsonPrimitive.content)
@@ -50,4 +52,22 @@ class BodyTest {
         val batch = Batch("install-1", "session-1", null, testConfig(), emptyList())
         assertEquals(null, Json.parseToJsonElement(body(batch)).jsonObject["user"])
     }
+
+    @Test
+    fun carriesDeviceIdWhenProvided() {
+        val batch = Batch(
+            install = "install-1",
+            session = "session-1",
+            user = null,
+            config = testConfig().copy(deviceId = "device-1"),
+            events = listOf(
+                QueuedEvent("event-1", "app_opened", 1_700_000_000_000, null, emptyMap(), "session-1", null)
+            ),
+        )
+
+        val json = Json.parseToJsonElement(body(batch)).jsonObject
+
+        assertEquals("device-1", json["device"]!!.jsonPrimitive.content)
+    }
+
 }
