@@ -35,6 +35,7 @@ internal fun body(batch: Batch): String =
         put("install", JsonPrimitive(batch.install))
         put("session", JsonPrimitive(batch.session))
         batch.user?.let { put("user", JsonPrimitive(it)) }
+        batch.config.deviceId?.let { put("device", JsonPrimitive(it)) }
         put(
             "sys",
             buildJsonObject {
