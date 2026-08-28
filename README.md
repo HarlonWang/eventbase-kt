@@ -1,63 +1,50 @@
 # eventbase-kt
 
-> Kotlin Multiplatform client for [eventbase](https://github.com/HarlonWang/eventbase) — typed events, offline queue, batched upload.
+> Kotlin Multiplatform client for [eventbase](https://github.com/HarlonWang/eventbase) — typed events, an offline queue, and batched upload.
 
-强类型事件定义、落盘队列、批量上报、生命周期自动埋点。协议契约以服务端仓的 [`docs/protocol.md`](https://github.com/HarlonWang/eventbase/blob/main/docs/protocol.md) 为唯一权威。
+**English** | [简体中文](README.zh-CN.md)
 
-> **状态（2026-08-19）**：核心与生命周期均已实现——install_id、落盘队列、批量上报、退避重试、
-> flow 串联、强类型事件、`app_opened` / `app_backgrounded` 自动上报、进后台 flush、
-> `RecordingSink` 测试替身。45 个测试（Android host），iOS 两个 target 编译通过。
-> **刻意不做定时 flush**：进后台与攒够 `flushAt` 两条触发已覆盖，定时器在移动端只换来耗电与复杂度。
+[![Maven Central](https://img.shields.io/maven-central/v/wang.harlon/eventbase-kt)](https://central.sonatype.com/artifact/wang.harlon/eventbase-kt)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-## 接入面只有 4 个 API
+**The whole surface is four calls** — `init`, `track`, `setUserId`, `startFlow`. Queueing, retries, install identity, lifecycle events and automatic properties all stay inside the library. The server half is [eventbase](https://github.com/HarlonWang/eventbase), which runs in your own Cloudflare Worker.
 
-`init` / `track` / `setUserId` / `startFlow`。其余（队列、重试、install_id、生命周期、自动属性）全在库内部。
+## What you get
 
-## 1. 依赖与初始化
+- **Events that can't be misspelled.** Your event vocabulary is a sealed class in *your* app — the library never learns what a "pick" is. Property names are constructor parameters, so a typo is a compile error and a rename is a refactor.
+- **Nothing is lost to a bad connection.** Events go to disk first, then upload in batches with exponential backoff. The queue survives process death, caps at 500, drops oldest first, and discards anything older than seven days.
+- **No device identifiers, ever.** The library generates its own install id and collects no ANDROID_ID, no IDFV, nothing. That keeps Play Data Safety, App Store privacy labels and GDPR declarations off your integration checklist — pass your own `deviceId` if you want one, and declare it yourself.
+- **Lifecycle analytics for free.** `app_opened` and `app_backgrounded` (with duration) are reported without a line of integration code, using the platform's own foreground signal rather than a hand-rolled Activity count that miscounts on rotation.
+- **Losses are diagnosable.** A one-line-per-stage debug log — queued, sent, kept for retry — reconciles against the server's own drop counters, so a missing event resolves to *never tracked*, *lost in transit*, or *refused by the server*.
+
+## Quick start
+
+**1. Add the dependency.** The HTTP engine is yours to choose.
 
 ```kotlin
-// shared/build.gradle.kts
-commonMain.dependencies { implementation("wang.harlon:eventbase-kt:0.1.0") }
+commonMain.dependencies { implementation("wang.harlon:eventbase-kt:<version>") }
 ```
 
-传递依赖：ktor-client-core + kotlinx-serialization-json + kotlinx-coroutines-core（engine 由消费方提供），
-Android 侧另有 `androidx.lifecycle:lifecycle-process`（见下）。
+**2. Initialize once, at startup.**
 
 ```kotlin
-// androidApp/TrendingApplication.onCreate()
 Eventbase.init(
-    context = this,                          // 仅 Android 需要；iOS 无此参数
+    context = this,                          // Android only; iOS has no such parameter
     config = EventbaseConfig(
-        endpoint = "https://api.trendingai.cn/t",
-        appKey = BuildConfig.EVENTBASE_KEY,  // 公开 key，进 APK 无妨
+        endpoint = "https://api.example.com/t",
+        appKey = BuildConfig.EVENTBASE_KEY,   // public key; shipping it in the APK is fine
         appVersion = BuildConfig.VERSION_NAME,
         platform = "android",
         channel = BuildConfig.CHANNEL,
         locale = systemLocaleTag(),
         isDebug = BuildConfig.DEBUG,
-        installId = existingInstallId,          // 可选，见下
     ),
 )
 ```
 
-`installId` 只在库自己的存储里还没有 id 时作**种子**写入，之后再传别的值也不会改它。
-消费方若已有一个安装级标识（TrendingAI 拿它当 chat 配额的 `X-Install-Id`），传进来，
-客户端事件才能和服务端按同一个 id 补发的事件（配额拦截、成单）串成一条漏斗；不传就由库自己生成。
+From here the library owns install id, automatic properties, lifecycle events and the offline queue.
 
-`deviceId`（可选）随每批上报透传。**库自己绝不采集设备标识符**——ANDROID_ID / IDFV 会牵出
-Play 数据安全、App Store 隐私标签、GDPR 的单独申报，默认带上等于让所有接入方都背这份义务；
-而库也拿不到「正确」的那个值（ANDROID_ID 按签名密钥隔离、模拟器有固定串，IDFV 全卸载即重置），
-消费方侧本来就有权威源。要用就自己传并自行申报。它**不作 DAU 去重单位**，用途是与安装数相比
-得出重装率——口径见服务端仓 `docs/telemetry-design.md`。
-
-Android 侧会自动注册 `ActivityLifecycleCallbacks`、iOS 侧注册 `NSNotificationCenter` 观察者，
-`app_opened` / `app_backgrounded` 无需接入方写一行代码（`autoLifecycle = false` 可关）。
-
-`init` 之后库自己接管 install_id 的生成与持久化、app_version / platform / locale 的采集、生命周期事件、离线队列。
-
-## 2. 定义自己的事件词汇
-
-库只认一个接口，**词汇住在 App 里**——词汇是 App 特有的，库不该知道 `picks` 是什么。
+**3. Define your vocabulary.** It lives in your app, not in the library.
 
 ```kotlin
 sealed class AppEvent(
@@ -65,111 +52,55 @@ sealed class AppEvent(
     override val props: Map<String, Any?>,
 ) : Event {
 
-    data class ContentOpened(
-        val source: String, val rank: Int, val contentId: String,
-        val title: String, val section: String? = null,
-    ) : AppEvent("content_opened", mapOf(
-        "source" to source, "rank" to rank, "content_id" to contentId,
-        "title" to title.take(60), "section" to section,
-    ))
+    data class ContentOpened(val source: String, val rank: Int, val contentId: String) :
+        AppEvent("content_opened", mapOf("source" to source, "rank" to rank, "content_id" to contentId))
 
     data class SettingChanged(val key: String, val value: String) :
         AppEvent("setting_changed", mapOf("key" to key, "value" to value))
 }
-
-Eventbase.track(AppEvent.ContentOpened(source = "github", rank = 3, contentId = item.id, title = item.title))
 ```
 
-拼错属性名编译不过，改名就是一次全局重构。
-
-## 3. 典型场景
-
-### 页面浏览
+**4. Track.**
 
 ```kotlin
-@Composable
-fun TrackScreen(screen: String, from: String? = null) {
-    LaunchedEffect(screen, from) { Eventbase.track(ScreenViewed(screen, from)) }
-}
+Eventbase.track(AppEvent.ContentOpened(source = "github", rank = 3, contentId = item.id))
+
+Eventbase.setUserId(identity.id)   // after sign-in; later events carry user_id
+Eventbase.clearUserId()            // on sign-out; the install id is unchanged
 ```
 
-新增页面只多一行，不新增事件名。
-
-### 跨端漏斗（OAuth 回跳）
+**5. Follow one user journey across a process death.**
 
 ```kotlin
 val flow = Eventbase.startFlow()
 Eventbase.track(AuthStarted("sign_in", method = "github"), flow)
 
-// 浏览器回跳之后（可能已跨进程重启）
+// after the browser comes back — possibly in a brand new process
 Eventbase.track(AuthFinished("sign_in", "github", outcome = "success"), Eventbase.currentFlow())
 ```
 
-`startFlow()` 落盘保存，进程被杀也能续上——「用户空手回到 App」那类黑洞靠它观测。`flow` 的语义与服务端 loginbase 的 `flow_id` 一致，两端在分析时合流。
+`startFlow()` is persisted, so "the user went to the browser and never came back" becomes something you can actually measure.
 
-### 登录态关联
+## What the library handles
 
-```kotlin
-Eventbase.setUserId(identity.id)   // 登录成功后：此后事件带 user_id，并触发一次 install↔identity 映射
-Eventbase.clearUserId()            // 登出：install_id 不变，只解除关联
-```
-
-### 后台唤醒 / Alarm 里上报
-
-```kotlin
-Eventbase.track(NotificationOpened(kind = "daily_picks"))
-```
-
-先落盘再发，不必为上传留窗口。库只在**首次进入前台**才发 `app_opened`，纯后台唤醒起的进程不构成会话。
-
-### 测试
-
-```kotlin
-val recorder = RecordingSink()
-Eventbase.initForTest(sink = recorder)
-
-viewModel.onTabSelected(HomeTab.ME)
-
-assertEquals(listOf("tab_switched"), recorder.names)
-assertEquals(mapOf("tab" to "me", "method" to "tap"), recorder.propsOf("tab_switched"))
-```
-
-### 调试与上线前对账
-
-debug 构建自动带 `is_debug=1`（服务端照收、分析默认过滤）。`logEvents = true` 打开诊断日志：
-
-```bash
-adb logcat -s eventbase:D      # iOS 侧走 NSLog，Console.app 里搜 [eventbase]
-```
-
-三类日志，合起来能把「丢在哪一段」定位出来：
-
-```
-track content_opened {source=github, rank=3}      入队
-POST /e -> 204 (3 events)                          服务端回了什么
-flush 3 sent, queued=0                             出队，队列剩多少
-flush 3 kept, retry in 5000ms, queued=3            留队，下次重试间隔
-```
-
-**为什么需要它**：服务端只知道「收到了什么」，与客户端「本来要发什么」之差就是丢失，
-但分不清是没 track 还是传丢了。logcat 补的正是这一段；服务端那侧由 `ingest_drops`
-（按天按原因记账）补主动丢弃。三者对齐才能把丢失归因到 **没 track / 传丢了 / 服务端拒了**。
-
-冒烟演练（断网点 5 下 → 恢复）应看到：5 条 track、`flush 5 kept`、`queued=5`；恢复后
-`POST /e -> 204`、`flush 5 sent`、`queued=0`；最后用取数接口查出这 5 条。**三处数字一致才算通过。**
-
-## 4. 库负责的事
-
-| 能力 | 行为 |
+| | |
 |---|---|
-| 离线队列 | 落盘、上限 500 条、满了丢最老、出队前丢弃超过 7 天的事件 |
-| flush 时机 | 进后台（需 `autoLifecycle = true`）、攒够 `flushAt`；**刻意没有定时器**，进程被杀不丢已入队事件 |
-| 失败重试 | 指数退避；4xx 与 204 一律出队（服务端已判定，重试无意义） |
-| install_id | 首次启动生成，卸载重装才变，**不取任何设备标识符** |
-| device_id | 只透传消费方传入的 `deviceId`，**库不采集也不推导**；不传则上报体无此字段 |
-| 自动属性 | app_version / platform / channel / sys_locale / is_debug / session |
-| 生命周期事件 | `app_opened` / `app_backgrounded`（含 `duration_s`），接入方零代码 |
+| Offline queue | On disk, capped at 500, oldest dropped first, events older than 7 days discarded on the way out |
+| Flush timing | On backgrounding, and whenever `flushAt` events have accumulated — **deliberately no timer**, which on mobile only buys battery drain |
+| Retries | Exponential backoff; both 4xx and 204 dequeue, because the server has already decided |
+| Install identity | Generated on first launch, changes only on reinstall, derived from no device identifier |
+| Automatic properties | app_version, platform, channel, locale, is_debug, session |
+| Lifecycle events | `app_opened` / `app_backgrounded`, zero integration code (`autoLifecycle = false` opts out) |
+| Testing | `RecordingSink` captures events in-process; assert on names and properties without a server |
 
-## 5. 与 loginbase-kt 的关系
+## Documentation
 
-**不依赖**。登录相关的客户端事件由 App 在自己的 auth 回调里上报，loginbase-kt 不感知埋点；服务端那一半由 loginbase 写进同一张表，两端靠 `flow_id` 合流。
+| | |
+|---|---|
+| [Integration guide](docs/integration.md) | Common scenarios, diagnostic logging, the smoke drill, testing, `installId` and `deviceId` |
+| [Ingestion protocol](https://github.com/HarlonWang/eventbase/blob/main/docs/protocol.md) | The wire contract, in the server repo — the single source of truth |
+| [Telemetry design](https://github.com/HarlonWang/eventbase/blob/main/docs/telemetry-design.md) | Event vocabulary and metric definitions |
+
+## License
+
+MIT
