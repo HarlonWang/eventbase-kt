@@ -25,11 +25,11 @@
 commonMain.dependencies { implementation("wang.harlon:eventbase-kt:<version>") }
 ```
 
-**2. 启动时初始化一次。**
+**2. 启动时初始化一次。** 下面是 Android 形态；iOS 侧写法、以及那几个常量在 iOS 上从哪来，见[接入指南](docs/integration.md)。
 
 ```kotlin
 Eventbase.init(
-    context = this,                          // 仅 Android 需要；iOS 无此参数
+    context = this,                          // 仅 Android：给 SharedPreferences 的句柄
     config = EventbaseConfig(
         endpoint = "https://api.example.com/t",
         appKey = BuildConfig.EVENTBASE_KEY,   // 公开 key，进 APK 无妨
@@ -97,7 +97,7 @@ Eventbase.track(AuthFinished("sign_in", "github", outcome = "success"), Eventbas
 
 | | |
 |---|---|
-| [接入指南](docs/integration.md) | 典型场景、诊断日志、冒烟对账、测试、`installId` 与 `deviceId` |
+| [接入指南](docs/integration.md) | iOS 侧初始化、典型场景、诊断日志、冒烟对账、测试、`installId` 与 `deviceId` |
 | [上报协议](https://github.com/HarlonWang/eventbase/blob/main/docs/protocol.md) | wire 契约，住在服务端仓——唯一权威 |
 | [埋点设计](https://github.com/HarlonWang/eventbase/blob/main/docs/telemetry-design.md) | 事件词汇与指标口径 |
 

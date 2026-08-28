@@ -25,11 +25,11 @@
 commonMain.dependencies { implementation("wang.harlon:eventbase-kt:<version>") }
 ```
 
-**2. Initialize once, at startup.**
+**2. Initialize once, at startup.** Android is shown below; the iOS form — where the constants come from instead of `BuildConfig` — is in the [integration guide](docs/integration.md).
 
 ```kotlin
 Eventbase.init(
-    context = this,                          // Android only; iOS has no such parameter
+    context = this,                          // Android only: the handle for SharedPreferences
     config = EventbaseConfig(
         endpoint = "https://api.example.com/t",
         appKey = BuildConfig.EVENTBASE_KEY,   // public key; shipping it in the APK is fine
@@ -97,7 +97,7 @@ Eventbase.track(AuthFinished("sign_in", "github", outcome = "success"), Eventbas
 
 | | |
 |---|---|
-| [Integration guide](docs/integration.md) | Common scenarios, diagnostic logging, the smoke drill, testing, `installId` and `deviceId` |
+| [Integration guide](docs/integration.md) | iOS initialization, common scenarios, diagnostic logging, the smoke drill, testing, `installId` and `deviceId` |
 | [Ingestion protocol](https://github.com/HarlonWang/eventbase/blob/main/docs/protocol.md) | The wire contract, in the server repo — the single source of truth |
 | [Telemetry design](https://github.com/HarlonWang/eventbase/blob/main/docs/telemetry-design.md) | Event vocabulary and metric definitions |
 

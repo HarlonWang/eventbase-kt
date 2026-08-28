@@ -1,6 +1,46 @@
 # 接入指南
 
-README 讲最小接入，这里讲典型场景、诊断手段，以及两个配置项背后的取舍。
+README 讲最小接入（Android 形态），这里讲 iOS 侧初始化、典型场景、诊断手段，以及两个配置项背后的取舍。
+
+## iOS 侧初始化
+
+README 的示例是 Android 形态。iOS 把 init 写在共享模块的 `iosMain` 里，Swift 侧在 `didFinishLaunchingWithOptions` 调一次（`SharedKt.initAnalytics()`）：
+
+```kotlin
+// iosMain
+import kotlin.experimental.ExperimentalNativeApi
+import platform.Foundation.NSBundle
+import platform.Foundation.NSLocale
+import platform.Foundation.preferredLanguages
+
+@OptIn(ExperimentalNativeApi::class)
+fun initAnalytics() {
+    Eventbase.init(
+        config = EventbaseConfig(
+            endpoint = "https://api.example.com/t",
+            appKey = infoPlist("EventbaseKey"),
+            appVersion = infoPlist("CFBundleShortVersionString"),
+            platform = "ios",
+            channel = "app_store",
+            locale = NSLocale.preferredLanguages.firstOrNull() as? String ?: "unknown",
+            isDebug = Platform.isDebugBinary,
+        ),
+    )
+}
+
+private fun infoPlist(key: String): String =
+    NSBundle.mainBundle.objectForInfoDictionaryKey(key) as? String ?: "unknown"
+```
+
+与 Android 只差三处，其余字段两端同名同义：
+
+| | Android | iOS |
+|---|---|---|
+| 存储句柄 | 传 `context`，库用它开 SharedPreferences | 不传，`NSUserDefaults` 自取 |
+| 构建期常量 | `BuildConfig.*` | Info.plist（`appKey` 用 xcconfig 注入）与 `Platform.isDebugBinary` |
+| HTTP engine | `androidMain` 加 okhttp 等 | `iosMain` 加 `ktor-client-darwin`，缺了它运行期没有 engine 可用 |
+
+`platform` 由你显式传 `"ios"`，库不推导。README 里的 `systemLocaleTag()` 也不是库导出的 API，是消费方自己的 expect/actual——两端都要自己实现，iOS 侧即上面那行 `preferredLanguages`。
 
 ## installId：只作种子
 
