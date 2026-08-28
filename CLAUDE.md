@@ -2,15 +2,17 @@
 
 [eventbase](https://github.com/HarlonWang/eventbase) 的 Kotlin Multiplatform 客户端库：强类型事件、离线队列、批量上报。
 
-**开工前先读 README.md 与 `docs/integration.md`**（接入方视角的完整用法），以及服务端仓的 `docs/protocol.md`——**协议唯一权威只住服务端仓，本仓不留副本**。
+**开工前先读 README.md 与 `docs/integration.md`**（接入方视角的完整用法），以及服务端仓的 [`docs/protocol.md`](https://github.com/HarlonWang/eventbase/blob/main/docs/protocol.md)——**协议唯一权威只住服务端仓，本仓不留副本**。
+
+**本仓是 public。**业务读数与内部口径（事件量、增长曲线、生产域名）一律不进本仓，也不进源码注释。
 
 ## 关联仓库
 
-| 路径 | 角色 |
+| 仓库 | 角色 |
 |---|---|
-| `/Users/wanghl/eventbase` | **服务端仓 + 协议权威**：`docs/protocol.md` / `docs/telemetry-design.md`（含事件词汇） |
-| `/Users/wanghl/TrendingProjects/TrendingAI` | 首个消费方：约 130 个调用点按新词汇重构，替换 Aptabase |
-| `/Users/wanghl/loginbase-kt` | 邻居：同一套 CI 与发布链路；**本库不依赖它，它也不依赖本库** |
+| [eventbase](https://github.com/HarlonWang/eventbase) | **服务端仓 + 协议权威**：`docs/protocol.md` / `docs/telemetry-design.md`（含事件词汇） |
+| [TrendingAI](https://github.com/HarlonWang/TrendingAI) | 首个消费方：约 130 个调用点按新词汇重构，替换 Aptabase |
+| [loginbase-kt](https://github.com/HarlonWang/loginbase-kt) | 邻居：同一套 CI 与发布链路；**本库不依赖它，它也不依赖本库** |
 
 ## 铁律
 
