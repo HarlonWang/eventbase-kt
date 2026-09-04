@@ -76,31 +76,41 @@ class EventbaseClient internal constructor(
                 if (config.logEvents) logLine("flush skipped, backoff for ${backoffUntil - clock.now()}ms")
                 return
             }
-            while (true) {
-                val events = queue.peek()
-                if (events.isEmpty()) return
-                val head = events.first()
-                val batch = Batch(installId, head.session, head.user, config, events)
-                val result = try {
-                    sink.send(batch)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Throwable) {
-                    SendResult.RETRY
-                }
-                when (result) {
-                    SendResult.DROP -> {
-                        queue.drop(events.size)
-                        backoff = BACKOFF_START_MS
-                        if (config.logEvents) logLine("flush ${events.size} sent, queued=${queue.size}")
+            // 外层兜落盘失败（peek 清过期、drop 重写队列）：漏出去会顺着 scope.launch 崩掉宿主。
+            // 内层不能并进来——发送失败要就地转 RETRY，"flush N kept" 那行诊断才准
+            try {
+                while (true) {
+                    val events = queue.peek()
+                    if (events.isEmpty()) return
+                    val head = events.first()
+                    val batch = Batch(installId, head.session, head.user, config, events)
+                    val result = try {
+                        sink.send(batch)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Throwable) {
+                        SendResult.RETRY
                     }
-                    SendResult.RETRY -> {
-                        backoffUntil = clock.now() + backoff
-                        if (config.logEvents) logLine("flush ${events.size} kept, retry in ${backoff}ms, queued=${queue.size}")
-                        backoff = minOf(backoff * 2, BACKOFF_MAX_MS)
-                        return
+                    when (result) {
+                        SendResult.DROP -> {
+                            queue.drop(events.size)
+                            backoff = BACKOFF_START_MS
+                            if (config.logEvents) logLine("flush ${events.size} sent, queued=${queue.size}")
+                        }
+                        SendResult.RETRY -> {
+                            backoffUntil = clock.now() + backoff
+                            if (config.logEvents) logLine("flush ${events.size} kept, retry in ${backoff}ms, queued=${queue.size}")
+                            backoff = minOf(backoff * 2, BACKOFF_MAX_MS)
+                            return
+                        }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) {
+                backoffUntil = clock.now() + backoff
+                if (config.logEvents) logLine("flush aborted on storage failure, retry in ${backoff}ms, queued=${queue.size}")
+                backoff = minOf(backoff * 2, BACKOFF_MAX_MS)
             }
         }
     }

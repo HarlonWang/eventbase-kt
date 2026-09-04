@@ -26,6 +26,23 @@ class ThrowingSink : Sink {
     }
 }
 
+/** 落盘可随时置为失败：用于验证出队阶段的落盘异常不逃逸出 flush。 */
+class FailableStorage(private val delegate: Storage = MemoryStorage()) : Storage {
+    var writesFail = false
+
+    override fun get(key: String): String? = delegate.get(key)
+
+    override fun put(key: String, value: String) {
+        if (writesFail) throw IllegalStateException("disk full")
+        delegate.put(key, value)
+    }
+
+    override fun remove(key: String) {
+        if (writesFail) throw IllegalStateException("disk full")
+        delegate.remove(key)
+    }
+}
+
 data class TestEvent(
     override val name: String,
     override val props: Map<String, Any?> = emptyMap(),

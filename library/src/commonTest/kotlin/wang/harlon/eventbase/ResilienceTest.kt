@@ -92,6 +92,21 @@ class ResilienceTest {
     }
 
     @Test
+    fun storageFailureWhileDequeuingDoesNotEscapeFlush() = runTest {
+        val storage = FailableStorage()
+        val sink = RecordingSink()
+        val c = client(sink, storage)
+        c.track(TestEvent("sent"))
+
+        // 发送成功后 drop() 要重写队列，此时落盘失败——异常必须留在 flush 内，
+        // 否则会顺着 scope.launch 变成未捕获异常
+        storage.writesFail = true
+        c.flush()
+
+        assertEquals(listOf("sent"), sink.names)
+    }
+
+    @Test
     fun mutableNestedPropertyValuesAreSnapshotted() = runTest {
         val sink = RecordingSink()
         val c = client(sink)
