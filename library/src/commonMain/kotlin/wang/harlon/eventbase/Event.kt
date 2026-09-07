@@ -2,7 +2,7 @@ package wang.harlon.eventbase
 
 /**
  * 事件词汇由 App 定义，库不认识具体事件。
- * 命名与属性规范见服务端仓 docs/telemetry-design.md 的事件词汇表。
+ * 命名与属性规范见服务端仓 docs/telemetry-design.md；词汇表由 App 自己的文档持有。
  */
 interface Event {
     val name: String

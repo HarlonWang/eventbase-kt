@@ -10,8 +10,8 @@
 
 | 仓库 | 角色 |
 |---|---|
-| [eventbase](https://github.com/HarlonWang/eventbase) | **服务端仓 + 协议权威**：`docs/protocol.md` / `docs/telemetry-design.md`（含事件词汇） |
-| [TrendingAI](https://github.com/HarlonWang/TrendingAI) | 首个消费方：约 130 个调用点按新词汇重构，替换 Aptabase |
+| [eventbase](https://github.com/HarlonWang/eventbase) | **服务端仓 + 协议权威**：`docs/protocol.md` / `docs/telemetry-design.md`（事件命名规范；词汇表归各 App 私有文档） |
+| [TrendingAI](https://github.com/HarlonWang/TrendingAI) | 首个消费方，替换 Aptabase；其事件词汇表住私有父仓 |
 | [loginbase-kt](https://github.com/HarlonWang/loginbase-kt) | 邻居：同一套 CI 与发布链路；**本库不依赖它，它也不依赖本库** |
 
 ## 铁律
