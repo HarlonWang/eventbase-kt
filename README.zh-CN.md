@@ -67,6 +67,8 @@ Eventbase.track(AppEvent.ContentOpened(source = "github", rank = 3, contentId = 
 
 Eventbase.setUserId(identity.id)   // 登录成功后：此后事件带 user_id
 Eventbase.clearUserId()            // 登出：install_id 不变，只解除关联
+
+Eventbase.setProperty("bundle_version", bundle.version)   // 本进程此后的每条事件都带上
 ```
 
 **5. 串起一条跨进程的用户旅程。**
@@ -90,6 +92,7 @@ Eventbase.track(AuthFinished("sign_in", "github", outcome = "success"), Eventbas
 | 失败重试 | 指数退避；4xx 与 204 一律出队（服务端已判定，重试无意义） |
 | 安装标识 | 首次启动生成，卸载重装才变，不取任何设备标识符 |
 | 自动属性 | app_version / platform / channel / locale / is_debug / session |
+| 全局属性 | `setProperty` 给本进程此后的每条事件加一个键——不落盘，事件自己的同名键优先，会让事件超过服务端 20 键上限时一个也不附加，超过 40 字符的键不接受 |
 | 生命周期事件 | `app_opened` / `app_backgrounded`，接入方零代码（`autoLifecycle = false` 可关） |
 | 测试 | `RecordingSink` 进程内收事件，不用服务端就能断言事件名与属性 |
 

@@ -15,6 +15,10 @@ private const val KEY_INSTALL = "eventbase.install"
 private const val KEY_USER = "eventbase.user"
 private const val KEY_FLOW = "eventbase.flow"
 
+/** 服务端对超过这个键数、或有键长超过 [MAX_KEY_LENGTH] 的事件整条丢弃（服务端仓 docs/protocol.md「限制」） */
+internal const val MAX_PROPS = 20
+internal const val MAX_KEY_LENGTH = 40
+
 private const val BACKOFF_START_MS = 5_000L
 private const val BACKOFF_MAX_MS = 5 * 60_000L
 
@@ -31,6 +35,10 @@ class EventbaseClient internal constructor(
 
     @Volatile
     private var userId: String? = storage.get(KEY_USER)
+
+    @Volatile
+    private var properties: Map<String, Any> = emptyMap()
+    private val propertiesLock = createLock()
     private var backoffUntil = 0L
     private var backoff = BACKOFF_START_MS
 
@@ -49,10 +57,9 @@ class EventbaseClient internal constructor(
 
     fun track(event: Event, flow: String? = null) {
         trackedAnything = true
-        queue.add(
-            QueuedEvent(newId(), event.name, clock.now(), flow, canonicalProps(event.props), sessionId, userId)
-        )
-        if (config.logEvents) log(event)
+        val props = withProperties(event.name, canonicalProps(event.props))
+        queue.add(QueuedEvent(newId(), event.name, clock.now(), flow, props, sessionId, userId))
+        if (config.logEvents) logLine("track ${event.name} $props")
         if (queue.size >= config.flushAt) scope.launch { flush() }
     }
 
@@ -62,6 +69,23 @@ class EventbaseClient internal constructor(
     }
 
     fun clearUserId() = setUserId(null)
+
+    /**
+     * 此后每条事件都带上 [key]（入队时合并，事件自己的同名属性优先）；[value] 为 null 即移除。
+     * 只在本进程内有效，不落盘。合并后超过 [MAX_PROPS] 个键的事件不附加任何全局属性；
+     * 空键或超过 [MAX_KEY_LENGTH] 的键不接受——它会让此后每条事件都被服务端丢弃。
+     */
+    fun setProperty(key: String, value: Any?) {
+        if (key.isEmpty() || key.length > MAX_KEY_LENGTH) {
+            if (config.logEvents) logLine("setProperty ignored: key \"$key\" must be 1..$MAX_KEY_LENGTH characters")
+            return
+        }
+        propertiesLock.withLock {
+            properties = if (value == null) properties - key else properties + canonicalProps(mapOf(key to value))
+        }
+    }
+
+    fun removeProperty(key: String) = setProperty(key, null)
 
     /** 落盘保存，进程被杀也能把回跳后的事件接回同一条漏斗。 */
     fun startFlow(): String = newId().also { storage.put(KEY_FLOW, it) }
@@ -119,7 +143,15 @@ class EventbaseClient internal constructor(
 
     internal fun dispose() = onDispose()
 
-    private fun log(event: Event) = logLine("track ${event.name} ${event.props}")
+    private fun withProperties(name: String, own: Map<String, Any>): Map<String, Any> {
+        val extra = properties.filterKeys { it !in own }
+        if (extra.isEmpty()) return own
+        if (own.size + extra.size > MAX_PROPS) {
+            if (config.logEvents) logLine("track $name: global properties ${extra.keys} not attached, ${own.size} own + ${extra.size} would exceed $MAX_PROPS keys")
+            return own
+        }
+        return own + extra
+    }
 }
 
 @OptIn(ExperimentalUuidApi::class)
