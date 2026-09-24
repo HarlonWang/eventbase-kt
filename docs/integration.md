@@ -103,6 +103,15 @@ assertEquals(listOf("tab_switched"), recorder.names)
 assertEquals(mapOf("tab" to "me", "method" to "tap"), recorder.propsOf("tab_switched"))
 ```
 
+## 全局属性
+
+`setProperty(key, value)` 让本进程此后的每条事件都带上这个键，适合「整个会话都成立的上下文」——当前跑的动态包版本、实验分组之类；`value` 为 null 或 `removeProperty(key)` 即移除。
+
+- **只在本进程内有效，不落盘**：值由 App 每次启动时重新确定，落盘会让重启后、重新设置之前的事件带上旧值。在 `init` 之前调用无效
+- **入队时合并、按当时的值快照**；事件自己的同名键优先
+- **键数上限**：服务端对超过 20 个 props 的事件整条丢弃（[protocol.md](https://github.com/HarlonWang/eventbase/blob/main/docs/protocol.md) 的「限制」）。合并后会超限的那条事件**一个全局属性也不附加**、只保留自身的键，诊断日志记一行——全局属性应当少而稳定
+- 生命周期事件同样带上；但 `app_opened` 发生在进程一启动，早于 App 设置属性的，那一条不会有
+
 ## 诊断日志与上线前对账
 
 debug 构建自动带 `is_debug=1`（服务端照收、分析默认过滤）。`logEvents = true` 打开诊断日志：

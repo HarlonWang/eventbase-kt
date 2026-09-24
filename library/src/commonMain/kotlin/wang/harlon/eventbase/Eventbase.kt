@@ -56,6 +56,14 @@ object Eventbase {
         client?.clearUserId()
     }
 
+    fun setProperty(key: String, value: Any?) {
+        client?.setProperty(key, value)
+    }
+
+    fun removeProperty(key: String) {
+        client?.removeProperty(key)
+    }
+
     fun startFlow(): String? = client?.startFlow()
 
     fun currentFlow(): String? = client?.currentFlow()
