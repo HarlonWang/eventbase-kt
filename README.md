@@ -92,7 +92,7 @@ Eventbase.track(AuthFinished("sign_in", "github", outcome = "success"), Eventbas
 | Retries | Exponential backoff; both 4xx and 204 dequeue, because the server has already decided |
 | Install identity | Generated on first launch, changes only on reinstall, derived from no device identifier |
 | Automatic properties | app_version, platform, channel, locale, is_debug, session |
-| Global properties | `setProperty` adds a key to every later event in the process — not persisted, the event's own key wins, and none are attached to an event they would push past the server's 20-key limit |
+| Global properties | `setProperty` adds a key to every later event in the process — not persisted, the event's own key wins, none are attached to an event they would push past the server's 20-key limit, and keys over 40 characters are refused |
 | Lifecycle events | `app_opened` / `app_backgrounded`, zero integration code (`autoLifecycle = false` opts out) |
 | Testing | `RecordingSink` captures events in-process; assert on names and properties without a server |
 

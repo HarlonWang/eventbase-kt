@@ -74,6 +74,19 @@ class PropertiesTest {
     }
 
     @Test
+    fun aKeyTheServerWouldRejectIsNeverSet() = runTest {
+        val sink = RecordingSink()
+        val c = client(sink)
+        c.setProperty("", "x")
+        c.setProperty("k".repeat(41), "x")
+        c.setProperty("k".repeat(40), "ok")
+        c.track(TestEvent("e"))
+        c.flush()
+
+        assertEquals(mapOf("k".repeat(40) to "ok"), sink.propsOf("e"))
+    }
+
+    @Test
     fun propertiesDoNotOutliveTheProcess() = runTest {
         val storage = MemoryStorage()
         client(RecordingSink(), storage).setProperty("v", "1")
